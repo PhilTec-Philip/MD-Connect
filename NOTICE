@@ -1,0 +1,39 @@
+MD-Connect
+Copyright 2026 Philip Müller
+
+This product is licensed under the Apache License, Version 2.0.
+A copy of the license is available in the LICENSE file in this repository.
+
+------------------------------------------------------------------------
+Third-party software
+
+FiveNet (https://github.com/fivenet-app/fivenet)
+Copyright 2023 Alexander Trost
+Licensed under the Apache License, Version 2.0.
+
+Portions of this software (the gRPC/protobuf service definitions and the
+generated client bindings under MD-Connect/Generated) are derived from the
+FiveNet project. This software is an independent third-party client for the
+FiveNet roleplay server and is not affiliated with, endorsed by, sponsored by,
+or otherwise connected to the FiveNet project or Alexander Trost.
+
+"FiveNet" is a product name of its respective owner. It is used here solely
+to describe the server software this client interoperates with.
+
+SwiftProtobuf (https://github.com/apple/swift-protobuf)
+Copyright 2014-2017 Apple Inc. and the Swift project authors
+Licensed under the Apache License, Version 2.0.
+
+------------------------------------------------------------------------
+Disclaimer of Warranty
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+See the Apache License, Version 2.0 (LICENSE) for the full copyright,
+trademark, warranty and liability terms.
