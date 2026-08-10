@@ -59,182 +59,184 @@ struct MailView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
+                    }
+                }
+
+                if !isSearching {
+                    Section {
+                        SectionCard {
+                            PillTabBar(tabs: MailboxTab.allCases, selection: $tab) { $0.rawValue }
+                        }
                         .cardRow()
-                }
-            }
-
-            if !isSearching {
-                Section {
-                    SectionCard {
-                        PillTabBar(tabs: MailboxTab.allCases, selection: $tab) { $0.rawValue }
-                    }
-                    .cardRow()
-                }
-            }
-
-            if isLoading && threads.isEmpty && searchMessages.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if emails.isEmpty {
-                EmptyStateView(
-                    "envelope",
-                    color: FiveNetModule.mailer.tint,
-                    title: "Kein Mail-Konto",
-                    message: "Für deinen Charakter wurde noch kein Mail-Konto eingerichtet."
-                )
-            } else if let errorMessage, displayedItems == 0 {
-                EmptyStateView(
-                    "exclamationmark.triangle",
-                    color: Theme.Palette.danger,
-                    title: "Laden fehlgeschlagen",
-                    message: errorMessage,
-                    actionTitle: "Erneut versuchen"
-                ) {
-                    Task { await load(reset: true) }
-                }
-            } else if isSearching, searchMessages.isEmpty {
-                EmptyStateView(
-                    "magnifyingglass",
-                    color: Theme.Palette.accent,
-                    title: "Keine Treffer",
-                    message: "Für diese Suche wurden keine Nachrichten gefunden."
-                )
-            } else if threads.isEmpty {
-                EmptyStateView(
-                    "tray",
-                    color: FiveNetModule.mailer.tint,
-                    title: "Postfach leer",
-                    message: tab == .archive
-                        ? "Im Archiv sind keine Konversationen."
-                        : "Du hast noch keine Konversationen im Posteingang."
-                )
-            } else {
-                Section(resultSectionTitle) {
-                    if isSearching {
-                        ForEach(searchMessages) { message in
-                            Button {
-                                selectedRoute = route(for: message)
-                            } label: {
-                                MailSearchRow(message: message)
-                            }
-                            .buttonStyle(.plain)
-                            .cardRow()
-                        }
-                    } else {
-                        ForEach(threads) { thread in
-                            Button {
-                                selectedRoute = route(for: thread)
-                            } label: {
-                                MailThreadRow(thread: thread)
-                            }
-                            .buttonStyle(.plain)
-                            .cardRow()
-                        }
                     }
                 }
 
-                if hasMultiplePages {
-                    Section(pageHeaderText) {
-                        PaginationFooter {
-                            HStack {
+                if isLoading && threads.isEmpty && searchMessages.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if emails.isEmpty {
+                    EmptyStateView(
+                        "envelope",
+                        color: FiveNetModule.mailer.tint,
+                        title: "Kein Mail-Konto",
+                        message: "Für deinen Charakter wurde noch kein Mail-Konto eingerichtet."
+                    )
+                } else if let errorMessage, displayedItems == 0 {
+                    EmptyStateView(
+                        "exclamationmark.triangle",
+                        color: Theme.Palette.danger,
+                        title: "Laden fehlgeschlagen",
+                        message: errorMessage,
+                        actionTitle: "Erneut versuchen"
+                    ) {
+                        Task { await load(reset: true) }
+                    }
+                } else if isSearching, searchMessages.isEmpty {
+                    EmptyStateView(
+                        "magnifyingglass",
+                        color: Theme.Palette.accent,
+                        title: "Keine Treffer",
+                        message: "Für diese Suche wurden keine Nachrichten gefunden."
+                    )
+                } else if threads.isEmpty {
+                    EmptyStateView(
+                        "tray",
+                        color: FiveNetModule.mailer.tint,
+                        title: "Postfach leer",
+                        message: tab == .archive
+                            ? "Im Archiv sind keine Konversationen."
+                            : "Du hast noch keine Konversationen im Posteingang."
+                    )
+                } else {
+                    Section(resultSectionTitle) {
+                        if isSearching {
+                            ForEach(searchMessages) { message in
                                 Button {
-                                    Task { await load(page: currentPage - 1) }
+                                    selectedRoute = route(for: message)
                                 } label: {
-                                    Label("Zurück", systemImage: "chevron.left")
+                                    MailSearchRow(message: message)
                                 }
-                                .buttonStyle(.borderless)
-                                .disabled(currentPage == 0 || isLoading)
-
-                                Spacer()
-
-                                if isLoading {
-                                    ProgressView()
-                                }
-
-                                Spacer()
-
+                                .buttonStyle(.plain)
+                                .cardRow()
+                            }
+                        } else {
+                            ForEach(threads) { thread in
                                 Button {
-                                    Task { await load(page: currentPage + 1) }
+                                    selectedRoute = route(for: thread)
                                 } label: {
-                                    Label("Weiter", systemImage: "chevron.right")
-                                        .labelStyle(.titleAndIcon)
+                                    MailThreadRow(thread: thread)
                                 }
-                                .buttonStyle(.borderless)
-                                .disabled(!canGoNext || isLoading)
+                                .buttonStyle(.plain)
+                                .cardRow()
+                            }
+                        }
+                    }
+
+                    if hasMultiplePages {
+                        Section(pageHeaderText) {
+                            PaginationFooter {
+                                HStack {
+                                    Button {
+                                        Task { await load(page: currentPage - 1) }
+                                    } label: {
+                                        Label("Zurück", systemImage: "chevron.left")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(currentPage == 0 || isLoading)
+
+                                    Spacer()
+
+                                    if isLoading {
+                                        ProgressView()
+                                    }
+
+                                    Spacer()
+
+                                    Button {
+                                        Task { await load(page: currentPage + 1) }
+                                    } label: {
+                                        Label("Weiter", systemImage: "chevron.right")
+                                            .labelStyle(.titleAndIcon)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(!canGoNext || isLoading)
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-        .cardListStyle()
-        .searchable(text: $searchText, prompt: "Nachrichten durchsuchen")
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
-        .onChange(of: searchText) {
-            searchTask?.cancel()
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let task = Task { @MainActor in
-                if !query.isEmpty {
-                    try? await Task.sleep(nanoseconds: 300_000_000)
+            .cardListStyle()
+            .searchable(text: $searchText, prompt: "Nachrichten durchsuchen")
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .onChange(of: searchText) {
+                searchTask?.cancel()
+                let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                let task = Task { @MainActor in
+                    if !query.isEmpty {
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                    }
+                    guard !Task.isCancelled else { return }
+                    await load(reset: true)
                 }
-                guard !Task.isCancelled else { return }
+                searchTask = task
+            }
+            .onChange(of: tab) {
+                Task { await load(reset: true) }
+            }
+            .refreshable {
                 await load(reset: true)
             }
-            searchTask = task
+            .pendingAlarmBell()
+            .moduleNavTitle(.mailer)
+            .navConnectionDot()
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showUntestedHint = true
+                    } label: {
+                        Image(systemName: "flask.fill")
+                            .accessibilityLabel("Experimentell (noch nicht getestet)")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showCompose = true
+                    } label: {
+                        Label("Neue Nachricht", systemImage: "square.and.pencil")
+                    }
+                }
+            }
+            .alert("Noch nicht getestet", isPresented: $showUntestedHint) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Das Mail-Modul wurde noch nicht ausreichend getestet. Es kann daher zu Fehlern oder unerwartetem Verhalten kommen.")
+            }
+            .sheet(isPresented: $showCompose) {
+                MailComposeSheet { thread in
+                    selectedRoute = route(for: thread)
+                    Task { await load(reset: true) }
+                }
+            }
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                await loadEmails()
+                await load(reset: true)
+            }
         }
-        .onChange(of: tab) {
-            Task { await load(reset: true) }
-        }
-        .refreshable {
-            await load(reset: true)
-        }
-        .pendingAlarmBell()
-        .moduleNavTitle(.mailer)
-        .navConnectionDot()
         .navigationDestination(item: $selectedRoute) { route in
             MailThreadView(route: route) {
                 Task { await load(reset: true) }
             }
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    showUntestedHint = true
-                } label: {
-                    Image(systemName: "flask.fill")
-                        .accessibilityLabel("Experimentell (noch nicht getestet)")
-                }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showCompose = true
-                } label: {
-                    Label("Neue Nachricht", systemImage: "square.and.pencil")
-                }
-            }
-        }
-        .alert("Noch nicht getestet", isPresented: $showUntestedHint) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Das Mail-Modul wurde noch nicht ausreichend getestet. Es kann daher zu Fehlern oder unerwartetem Verhalten kommen.")
-        }
-        .sheet(isPresented: $showCompose) {
-            MailComposeSheet { thread in
-                selectedRoute = route(for: thread)
-                Task { await load(reset: true) }
-            }
-        }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            await loadEmails()
-            await load(reset: true)
         }
     }
 

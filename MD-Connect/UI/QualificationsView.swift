@@ -71,68 +71,70 @@ private struct QualificationResultsView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
+                    }
+                }
+
+                if isLoading && results.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if let errorMessage, results.isEmpty {
+                    EmptyStateView(
+                        "exclamationmark.triangle",
+                        color: Theme.Palette.danger,
+                        title: "Laden fehlgeschlagen",
+                        message: errorMessage,
+                        actionTitle: "Erneut versuchen"
+                    ) {
+                        Task { await load(reset: true) }
+                    }
+                } else if results.isEmpty {
+                    EmptyStateView(
+                        "checkmark.seal",
+                        color: Theme.Palette.accent,
+                        title: "Keine Qualifizierungen",
+                        message: "Für dich sind noch keine erfolgreichen Qualifizierungen vorhanden."
+                    )
+                } else {
+                Section("\(totalCount) Qualifizierungen") {
+                    ForEach(results) { result in
+                        Button {
+                            selectedQualificationID = result.qualificationID
+                        } label: {
+                            QualificationResultRow(result: result)
+                        }
+                        .buttonStyle(.plain)
                         .cardRow()
-                }
-            }
-
-            if isLoading && results.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if let errorMessage, results.isEmpty {
-                EmptyStateView(
-                    "exclamationmark.triangle",
-                    color: Theme.Palette.danger,
-                    title: "Laden fehlgeschlagen",
-                    message: errorMessage,
-                    actionTitle: "Erneut versuchen"
-                ) {
-                    Task { await load(reset: true) }
-                }
-            } else if results.isEmpty {
-                EmptyStateView(
-                    "checkmark.seal",
-                    color: Theme.Palette.accent,
-                    title: "Keine Qualifizierungen",
-                    message: "Für dich sind noch keine erfolgreichen Qualifizierungen vorhanden."
-                )
-            } else {
-            Section("\(totalCount) Qualifizierungen") {
-                ForEach(results) { result in
-                    Button {
-                        selectedQualificationID = result.qualificationID
-                    } label: {
-                        QualificationResultRow(result: result)
-                    }
-                    .buttonStyle(.plain)
-                    .cardRow()
-                }
-            }
-            }
-
-            if totalPages > 1 {
-                Section("Seite \(currentPage + 1) von \(totalPages)") {
-                    PaginationFooter {
-                        paginationButtons
                     }
                 }
+                }
+
+                if totalPages > 1 {
+                    Section("Seite \(currentPage + 1) von \(totalPages)") {
+                        PaginationFooter {
+                            paginationButtons
+                        }
+                    }
+                }
+            }
+            .cardListStyle()
+            .refreshable {
+                await load(reset: true)
+            }
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                await load(reset: true)
             }
         }
-        .cardListStyle()
         .navigationDestination(item: $selectedQualificationID) { id in
             QualificationDetailView(qualificationID: id)
-        }
-        .refreshable {
-            await load(reset: true)
-        }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            await load(reset: true)
         }
     }
 
@@ -282,93 +284,95 @@ struct ColleagueQualificationsView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .cardRow()
-                }
-            }
-
-            if isLoading && results.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if let errorMessage, results.isEmpty {
-                EmptyStateView(
-                    "exclamationmark.triangle",
-                    color: Theme.Palette.danger,
-                    title: "Laden fehlgeschlagen",
-                    message: errorMessage,
-                    actionTitle: "Erneut versuchen"
-                ) {
-                    Task { await load(reset: true) }
-                }
-            } else if results.isEmpty {
-                EmptyStateView(
-                    "checkmark.seal",
-                    color: Theme.Palette.accent,
-                    title: "Keine Qualifizierungen",
-                    message: "Für diesen Kollegen sind keine erfolgreichen Qualifizierungen vorhanden."
-                )
-            } else {
-                Section("\(totalCount) Qualifizierungen") {
-                    ForEach(results) { result in
-                        Button {
-                            selectedQualificationID = result.qualificationID
-                        } label: {
-                            QualificationResultRow(result: result)
-                        }
-                        .buttonStyle(.plain)
-                        .cardRow()
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
                     }
                 }
-            }
 
-            if totalPages > 1 {
-                Section("Seite \(currentPage + 1) von \(totalPages)") {
-                    PaginationFooter {
-                        HStack {
+                if isLoading && results.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if let errorMessage, results.isEmpty {
+                    EmptyStateView(
+                        "exclamationmark.triangle",
+                        color: Theme.Palette.danger,
+                        title: "Laden fehlgeschlagen",
+                        message: errorMessage,
+                        actionTitle: "Erneut versuchen"
+                    ) {
+                        Task { await load(reset: true) }
+                    }
+                } else if results.isEmpty {
+                    EmptyStateView(
+                        "checkmark.seal",
+                        color: Theme.Palette.accent,
+                        title: "Keine Qualifizierungen",
+                        message: "Für diesen Kollegen sind keine erfolgreichen Qualifizierungen vorhanden."
+                    )
+                } else {
+                    Section("\(totalCount) Qualifizierungen") {
+                        ForEach(results) { result in
                             Button {
-                                Task { await load(page: currentPage - 1) }
+                                selectedQualificationID = result.qualificationID
                             } label: {
-                                Label("Zurück", systemImage: "chevron.left")
+                                QualificationResultRow(result: result)
                             }
-                            .buttonStyle(.borderless)
-                            .disabled(currentPage == 0 || isLoading)
-
-                            Spacer()
-
-                            if isLoading {
-                                ProgressView()
-                            }
-
-                            Spacer()
-
-                            Button {
-                                Task { await load(page: currentPage + 1) }
-                            } label: {
-                                Label("Weiter", systemImage: "chevron.right")
-                                    .labelStyle(.titleAndIcon)
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(currentPage + 1 >= totalPages || isLoading)
+                            .buttonStyle(.plain)
+                            .cardRow()
                         }
                     }
                 }
+
+                if totalPages > 1 {
+                    Section("Seite \(currentPage + 1) von \(totalPages)") {
+                        PaginationFooter {
+                            HStack {
+                                Button {
+                                    Task { await load(page: currentPage - 1) }
+                                } label: {
+                                    Label("Zurück", systemImage: "chevron.left")
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(currentPage == 0 || isLoading)
+
+                                Spacer()
+
+                                if isLoading {
+                                    ProgressView()
+                                }
+
+                                Spacer()
+
+                                Button {
+                                    Task { await load(page: currentPage + 1) }
+                                } label: {
+                                    Label("Weiter", systemImage: "chevron.right")
+                                        .labelStyle(.titleAndIcon)
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(currentPage + 1 >= totalPages || isLoading)
+                            }
+                        }
+                    }
+                }
+            }
+            .cardListStyle()
+            .refreshable {
+                await load(reset: true)
+            }
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                await load(reset: true)
             }
         }
-        .cardListStyle()
         .navigationDestination(item: $selectedQualificationID) { id in
             QualificationDetailView(qualificationID: id)
-        }
-        .refreshable {
-            await load(reset: true)
-        }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            await load(reset: true)
         }
     }
 
@@ -418,111 +422,113 @@ private struct QualificationsListView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .cardRow()
-                }
-            }
-
-            if isLoading && qualifications.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if let errorMessage, qualifications.isEmpty {
-                EmptyStateView(
-                    "exclamationmark.triangle",
-                    color: Theme.Palette.danger,
-                    title: "Laden fehlgeschlagen",
-                    message: errorMessage,
-                    actionTitle: "Erneut versuchen"
-                ) {
-                    Task { await load(reset: true) }
-                }
-            } else if qualifications.isEmpty {
-                EmptyStateView(
-                    "graduationcap",
-                    color: Theme.Palette.accent,
-                    title: "Keine Qualifikationen gefunden",
-                    message: "Für diese Suche sind keine Qualifikationen vorhanden."
-                )
-            } else {
-            Section("\(totalCount) Qualifikationen") {
-                ForEach(qualifications) { qualification in
-                    Button {
-                        selectedQualificationID = qualification.id
-                    } label: {
-                        QualificationRow(qualification: qualification)
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
                     }
-                    .buttonStyle(.plain)
-                    .cardRow()
                 }
-            }
-            }
 
-            if totalPages > 1 {
-                Section("Seite \(currentPage + 1) von \(totalPages)") {
-                    PaginationFooter {
-                        HStack {
-                            Button {
-                                Task { await load(page: currentPage - 1) }
-                            } label: {
-                                Label("Zurück", systemImage: "chevron.left")
+                if isLoading && qualifications.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if let errorMessage, qualifications.isEmpty {
+                    EmptyStateView(
+                        "exclamationmark.triangle",
+                        color: Theme.Palette.danger,
+                        title: "Laden fehlgeschlagen",
+                        message: errorMessage,
+                        actionTitle: "Erneut versuchen"
+                    ) {
+                        Task { await load(reset: true) }
+                    }
+                } else if qualifications.isEmpty {
+                    EmptyStateView(
+                        "graduationcap",
+                        color: Theme.Palette.accent,
+                        title: "Keine Qualifikationen gefunden",
+                        message: "Für diese Suche sind keine Qualifikationen vorhanden."
+                    )
+                } else {
+                Section("\(totalCount) Qualifikationen") {
+                    ForEach(qualifications) { qualification in
+                        Button {
+                            selectedQualificationID = qualification.id
+                        } label: {
+                            QualificationRow(qualification: qualification)
+                        }
+                        .buttonStyle(.plain)
+                        .cardRow()
+                    }
+                }
+                }
+
+                if totalPages > 1 {
+                    Section("Seite \(currentPage + 1) von \(totalPages)") {
+                        PaginationFooter {
+                            HStack {
+                                Button {
+                                    Task { await load(page: currentPage - 1) }
+                                } label: {
+                                    Label("Zurück", systemImage: "chevron.left")
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(currentPage == 0 || isLoading)
+
+                                Spacer()
+
+                                if isLoading {
+                                    ProgressView()
+                                }
+
+                                Spacer()
+
+                                Button {
+                                    Task { await load(page: currentPage + 1) }
+                                } label: {
+                                    Label("Weiter", systemImage: "chevron.right")
+                                        .labelStyle(.titleAndIcon)
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(currentPage + 1 >= totalPages || isLoading)
                             }
-                            .buttonStyle(.borderless)
-                            .disabled(currentPage == 0 || isLoading)
-
-                            Spacer()
-
-                            if isLoading {
-                                ProgressView()
-                            }
-
-                            Spacer()
-
-                            Button {
-                                Task { await load(page: currentPage + 1) }
-                            } label: {
-                                Label("Weiter", systemImage: "chevron.right")
-                                    .labelStyle(.titleAndIcon)
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(currentPage + 1 >= totalPages || isLoading)
                         }
                     }
                 }
             }
-        }
-        .cardListStyle()
-        .searchable(text: $searchText, prompt: "Qualifikation suchen")
-        .navigationDestination(item: $selectedQualificationID) { id in
-            QualificationDetailView(qualificationID: id)
-        }
-        .autocorrectionDisabled()
-        .onChange(of: searchText) {
-            searchTask?.cancel()
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if query.isEmpty {
-                searchTask = Task { @MainActor in
+            .cardListStyle()
+            .searchable(text: $searchText, prompt: "Qualifikation suchen")
+            .autocorrectionDisabled()
+            .onChange(of: searchText) {
+                searchTask?.cancel()
+                let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if query.isEmpty {
+                    searchTask = Task { @MainActor in
+                        await load(reset: true)
+                    }
+                    return
+                }
+                let task = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard !Task.isCancelled else { return }
                     await load(reset: true)
                 }
-                return
+                searchTask = task
             }
-            let task = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                guard !Task.isCancelled else { return }
+            .refreshable {
                 await load(reset: true)
             }
-            searchTask = task
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                await load(reset: true)
+            }
         }
-        .refreshable {
-            await load(reset: true)
-        }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            await load(reset: true)
+        .navigationDestination(item: $selectedQualificationID) { id in
+            QualificationDetailView(qualificationID: id)
         }
     }
 

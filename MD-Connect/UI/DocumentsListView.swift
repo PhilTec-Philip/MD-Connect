@@ -50,125 +50,153 @@ struct DocumentsListView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .cardRow()
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
+                    }
                 }
-            }
 
-            if !categories.isEmpty {
-                Section("Kategorien") {
-                    SectionCard {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: Theme.Spacing.md) {
-                                categoryChip(id: nil, label: "Alle")
-                                ForEach(categories) { category in
-                                    categoryChip(id: category.id, label: category.name)
+                if !categories.isEmpty {
+                    Section("Kategorien") {
+                        SectionCard {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: Theme.Spacing.md) {
+                                    categoryChip(id: nil, label: "Alle")
+                                    ForEach(categories) { category in
+                                        categoryChip(id: category.id, label: category.name)
+                                    }
                                 }
+                                .padding(.vertical, Theme.Spacing.xs)
                             }
-                            .padding(.vertical, Theme.Spacing.xs)
                         }
-                    }
-                    .cardRow()
-                }
-            }
-
-            if isLoading && documents.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if let errorMessage, documents.isEmpty {
-                EmptyStateView(
-                    "exclamationmark.triangle",
-                    color: Theme.Palette.danger,
-                    title: "Laden fehlgeschlagen",
-                    message: errorMessage,
-                    actionTitle: "Erneut versuchen"
-                ) {
-                    Task { await load(reset: true) }
-                }
-            } else if documents.isEmpty {
-                EmptyStateView(
-                    "doc.text",
-                    color: Theme.Palette.accent,
-                    title: "Keine Dokumente gefunden",
-                    message: "Für diese Suche sind keine Dokumente vorhanden."
-                )
-            } else {
-                Section(resultCountText) {
-                    ForEach(documents) { document in
-                        Button {
-                            selectedDocumentID = document.id
-                        } label: {
-                            DocumentRow(document: document)
-                        }
-                        .buttonStyle(.plain)
                         .cardRow()
                     }
                 }
 
-                if hasMultiplePages {
-                    Section(pageHeaderText) {
-                        PaginationFooter {
-                            HStack {
-                                Button {
-                                    Task { await load(page: currentPage - 1) }
-                                } label: {
-                                    Label("Zurück", systemImage: "chevron.left")
-                                }
-                                .buttonStyle(.borderless)
-                                .disabled(currentPage == 0 || isLoading)
+                if isLoading && documents.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if let errorMessage, documents.isEmpty {
+                    EmptyStateView(
+                        "exclamationmark.triangle",
+                        color: Theme.Palette.danger,
+                        title: "Laden fehlgeschlagen",
+                        message: errorMessage,
+                        actionTitle: "Erneut versuchen"
+                    ) {
+                        Task { await load(reset: true) }
+                    }
+                } else if documents.isEmpty {
+                    EmptyStateView(
+                        "doc.text",
+                        color: Theme.Palette.accent,
+                        title: "Keine Dokumente gefunden",
+                        message: "Für diese Suche sind keine Dokumente vorhanden."
+                    )
+                } else {
+                    Section(resultCountText) {
+                        ForEach(documents) { document in
+                            Button {
+                                selectedDocumentID = document.id
+                            } label: {
+                                DocumentRow(document: document)
+                            }
+                            .buttonStyle(.plain)
+                            .cardRow()
+                        }
+                    }
 
-                                Spacer()
-
-                                if isLoading {
-                                    ProgressView()
-                                }
-
-                                Spacer()
-
-                                if canGoLast {
+                    if hasMultiplePages {
+                        Section(pageHeaderText) {
+                            PaginationFooter {
+                                HStack {
                                     Button {
-                                        Task { await load(page: totalPages - 1) }
+                                        Task { await load(page: currentPage - 1) }
                                     } label: {
-                                        Text("Letzte")
+                                        Label("Zurück", systemImage: "chevron.left")
                                     }
                                     .buttonStyle(.borderless)
-                                    .disabled(isLoading)
-                                }
+                                    .disabled(currentPage == 0 || isLoading)
 
-                                Button {
-                                    Task { await load(page: currentPage + 1) }
-                                } label: {
-                                    Label("Weiter", systemImage: "chevron.right")
-                                        .labelStyle(.titleAndIcon)
+                                    Spacer()
+
+                                    if isLoading {
+                                        ProgressView()
+                                    }
+
+                                    Spacer()
+
+                                    if canGoLast {
+                                        Button {
+                                            Task { await load(page: totalPages - 1) }
+                                        } label: {
+                                            Text("Letzte")
+                                        }
+                                        .buttonStyle(.borderless)
+                                        .disabled(isLoading)
+                                    }
+
+                                    Button {
+                                        Task { await load(page: currentPage + 1) }
+                                    } label: {
+                                        Label("Weiter", systemImage: "chevron.right")
+                                            .labelStyle(.titleAndIcon)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(!canGoNext || isLoading)
                                 }
-                                .buttonStyle(.borderless)
-                                .disabled(!canGoNext || isLoading)
                             }
                         }
                     }
                 }
             }
+            .cardListStyle()
+            .searchable(text: $searchText, prompt: "Titel, Inhalt oder DOC-ID suchen")
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .onChange(of: searchText) {
+                Task { await load(reset: true) }
+            }
+            .onChange(of: selectedCategoryID) {
+                Task { await load(reset: true) }
+            }
+            .refreshable {
+                await load(reset: true)
+            }
+            .pendingAlarmBell()
+            .moduleNavTitle(.documents)
+            .navConnectionDot()
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showCreateSheet = true
+                    } label: {
+                        Label("Dokument erstellen", systemImage: "plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showCreateSheet) {
+                CreateDocumentSheet { id in
+                    createdDocumentID = id
+                    showCreatedDocument = true
+                }
+            }
+            .onChange(of: showCreateSheet) {
+                if !showCreateSheet {
+                    Task { await load(reset: true) }
+                }
+            }
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                await loadCategories()
+                await load(reset: true)
+            }
         }
-        .cardListStyle()
-        .searchable(text: $searchText, prompt: "Titel, Inhalt oder DOC-ID suchen")
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
-        .onChange(of: searchText) {
-            Task { await load(reset: true) }
-        }
-        .onChange(of: selectedCategoryID) {
-            Task { await load(reset: true) }
-        }
-        .refreshable {
-            await load(reset: true)
-        }
-        .pendingAlarmBell()
-        .moduleNavTitle(.documents)
-        .navConnectionDot()
         .navigationDestination(item: $selectedDocumentID) { id in
             DocumentDetailView(documentID: id)
         }
@@ -179,32 +207,6 @@ struct DocumentsListView: View {
             if let createdDocumentID {
                 DocumentDetailView(documentID: createdDocumentID)
             }
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showCreateSheet = true
-                } label: {
-                    Label("Dokument erstellen", systemImage: "plus")
-                }
-            }
-        }
-        .sheet(isPresented: $showCreateSheet) {
-            CreateDocumentSheet { id in
-                createdDocumentID = id
-                showCreatedDocument = true
-            }
-        }
-        .onChange(of: showCreateSheet) {
-            if !showCreateSheet {
-                Task { await load(reset: true) }
-            }
-        }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            await loadCategories()
-            await load(reset: true)
         }
     }
 

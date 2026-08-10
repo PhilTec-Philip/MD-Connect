@@ -41,37 +41,39 @@ struct UnitListView: View {
     @State private var selectedUnitID: Int64?
 
     var body: some View {
-        List {
-            ForEach(sections) { section in
-                Section(section.title) {
-                    ForEach(section.units) { unit in
-                        Button {
-                            selectedUnitID = unit.id
-                        } label: {
-                            UnitRow(unit: unit)
+        Group {
+            List {
+                ForEach(sections) { section in
+                    Section(section.title) {
+                        ForEach(section.units) { unit in
+                            Button {
+                                selectedUnitID = unit.id
+                            } label: {
+                                UnitRow(unit: unit)
+                            }
+                            .buttonStyle(.plain)
+                            .cardRow()
                         }
-                        .buttonStyle(.plain)
-                        .cardRow()
                     }
                 }
             }
-        }
-        .cardListStyle()
-        .navigationDestination(item: $selectedUnitID) { id in
-            UnitDetailView(unitID: id)
-        }
-        .overlay {
-            if sections.isEmpty {
-                EmptyStateView(
-                    "building.2",
-                    color: Theme.Palette.accent,
-                    title: "Keine Einheiten",
-                    message: "Es wurden keine besetzten Einheiten gefunden."
-                )
+            .cardListStyle()
+            .overlay {
+                if sections.isEmpty {
+                    EmptyStateView(
+                        "building.2",
+                        color: Theme.Palette.accent,
+                        title: "Keine Einheiten",
+                        message: "Es wurden keine besetzten Einheiten gefunden."
+                    )
+                }
+            }
+            .refreshable {
+                await appState.loadUnits()
             }
         }
-        .refreshable {
-            await appState.loadUnits()
+        .navigationDestination(item: $selectedUnitID) { id in
+            UnitDetailView(unitID: id)
         }
     }
 }

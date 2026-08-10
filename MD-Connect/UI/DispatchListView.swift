@@ -12,31 +12,33 @@ struct DispatchListView: View {
     @State private var selectedDispatchID: Int64?
 
     var body: some View {
-        List(appState.dispatches) { dispatch in
-            Button {
-                selectedDispatchID = dispatch.id
-            } label: {
-                DispatchRow(dispatch: dispatch)
+        Group {
+            List(appState.dispatches) { dispatch in
+                Button {
+                    selectedDispatchID = dispatch.id
+                } label: {
+                    DispatchRow(dispatch: dispatch)
+                }
+                .buttonStyle(.plain)
+                .cardRow()
             }
-            .buttonStyle(.plain)
-            .cardRow()
+            .cardListStyle()
+            .overlay {
+                if appState.dispatches.isEmpty {
+                    EmptyStateView(
+                        "checkmark.circle",
+                        color: Theme.Palette.accent,
+                        title: "Keine Einsätze",
+                        message: "Aktuell sind keine offenen Einsätze vorhanden."
+                    )
+                }
+            }
+            .refreshable {
+                await appState.loadDispatches()
+            }
         }
-        .cardListStyle()
         .navigationDestination(item: $selectedDispatchID) { id in
             DispatchDetailView(dispatchID: id)
-        }
-        .overlay {
-            if appState.dispatches.isEmpty {
-                EmptyStateView(
-                    "checkmark.circle",
-                    color: Theme.Palette.accent,
-                    title: "Keine Einsätze",
-                    message: "Aktuell sind keine offenen Einsätze vorhanden."
-                )
-            }
-        }
-        .refreshable {
-            await appState.loadDispatches()
         }
     }
 }

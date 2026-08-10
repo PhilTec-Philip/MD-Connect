@@ -46,8 +46,6 @@ struct LiveMapView: View {
     @AppStorage("livemapShowMarkerMarkers") private var showMarkerMarkers = true
     @AppStorage("livemapShowMarkerLabels") private var showMarkerLabels = true
     @State private var selectedMarker: Resources_Livemap_Markers_MarkerMarker?
-    @State private var joinInProgress = false
-    @State private var joinError: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -88,14 +86,6 @@ struct LiveMapView: View {
         }
         .sheet(item: $selectedMarker) { marker in
             MarkerMarkerDetailSheet(marker: marker)
-        }
-        .alert("Beitritt nicht möglich", isPresented: Binding(
-            get: { joinError != nil },
-            set: { if !$0 { joinError = nil } }
-        )) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(joinError ?? "")
         }
         .task {
             await appState.startCentrumStream()
@@ -646,17 +636,13 @@ struct LiveMapView: View {
         marker.hasColor ? (Color(hex: marker.color) ?? .accentColor) : .accentColor
     }
 
-    private func unitColor(_ unit: Resources_Centrum_Units_Unit) -> Color {
-        Color(hex: unit.color) ?? .accentColor
-    }
-
     // MARK: - Units tab
 
     private var unitsTab: some View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], spacing: 10) {
                 ForEach(sortedUnits) { unit in
-                    unitTile(unit)
+                    UnitTileView(unit: unit)
                 }
             }
             .padding(.horizontal)
@@ -681,105 +667,6 @@ struct LiveMapView: View {
             let r = favorites.contains(rhs.id)
             if l != r { return l }
             return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-        }
-    }
-
-    private func unitTile(_ unit: Resources_Centrum_Units_Unit) -> some View {
-        let isFavorite = appState.favoriteUnitIDs.contains(unit.id)
-        let isOwnUnit = appState.ownUnitID == unit.id
-        let color = unitColor(unit)
-
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(unit.initials)
-                    .font(.title3.bold())
-                    .foregroundStyle(color)
-                Spacer()
-                Button {
-                    appState.toggleUnitFavorite(unit.id)
-                } label: {
-                    Image(systemName: isFavorite ? "star.fill" : "star")
-                        .font(.subheadline)
-                        .foregroundStyle(isFavorite ? .yellow : Color(.tertiaryLabel))
-                }
-                .buttonStyle(.plain)
-            }
-            Text(unit.name)
-                .font(.caption)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-            Text("\(unit.users.count) \(unit.users.count == 1 ? "Mitglied" : "Mitglieder")")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if isOwnUnit {
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("Deine Einheit")
-                    }
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(color)
-                    Button(role: .destructive) {
-                        Task { await performLeave(unit) }
-                    } label: {
-                        Label("Verlassen", systemImage: "person.crop.circle.badge.minus")
-                            .font(.caption.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 5)
-                            .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                            .foregroundStyle(Color.red)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(joinInProgress)
-                }
-                .padding(.top, 2)
-            } else {
-                Button {
-                    Task { await performJoin(unit) }
-                } label: {
-                    Label(joinInProgress ? "Beitritt …" : "Beitreten", systemImage: "person.badge.plus")
-                        .font(.caption.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 5)
-                        .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                        .foregroundStyle(Color.accentColor)
-                }
-                .buttonStyle(.plain)
-                .disabled(joinInProgress)
-                .padding(.top, 2)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(isFavorite ? Color.yellow.opacity(0.5) : Color(.separator), lineWidth: isFavorite ? 1.5 : 1)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    @MainActor
-    private func performJoin(_ unit: Resources_Centrum_Units_Unit) async {
-        guard !joinInProgress else { return }
-        joinInProgress = true
-        defer { joinInProgress = false }
-        await appState.joinUnit(unit.id)
-        if let error = appState.centrumError {
-            joinError = error
-        }
-    }
-
-    @MainActor
-    private func performLeave(_ unit: Resources_Centrum_Units_Unit) async {
-        guard !joinInProgress else { return }
-        joinInProgress = true
-        defer { joinInProgress = false }
-        await appState.leaveUnit(unit.id)
-        if let error = appState.centrumError {
-            joinError = error
         }
     }
 }

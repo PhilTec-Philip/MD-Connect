@@ -518,156 +518,158 @@ struct JobConductListView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .cardRow()
-                }
-            }
-
-            if canCreate {
-                Section {
-                    Button {
-                        showCreateSheet = true
-                    } label: {
-                        HStack(spacing: Theme.Spacing.sm) {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(FiveNetModule.jobs.tint)
-                            Text("Neuen Eintrag erstellen")
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            CardChevron()
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .padding(Theme.Spacing.xl)
-                    .background(
-                        Theme.Palette.surface,
-                        in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                    )
-                    .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-                    .cardRow()
-                }
-            }
-
-            Section("Ansicht") {
-                SectionCard {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-                        Toggle("Abgelaufene anzeigen", isOn: $showExpired)
-                        Divider()
-                        Toggle("Entwürfe anzeigen", isOn: $showDrafts)
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
                     }
                 }
-                .cardRow()
-            }
 
-            if isLoading && entries.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if entries.isEmpty {
-                EmptyStateView(
-                    "list.clipboard",
-                    color: Theme.Palette.accent,
-                    title: "Keine Einträge",
-                    message: "Für diese Filter sind keine Führungsregister-Einträge vorhanden."
-                )
-            } else {
-                Section("\(totalCount) Einträge") {
-                    ForEach(entries) { entry in
+                if canCreate {
+                    Section {
                         Button {
-                            selectedEntryID = entry.id
+                            showCreateSheet = true
                         } label: {
-                            conductRow(entry)
+                            HStack(spacing: Theme.Spacing.sm) {
+                                Image(systemName: "plus.circle.fill")
+                                    .foregroundStyle(FiveNetModule.jobs.tint)
+                                Text("Neuen Eintrag erstellen")
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                CardChevron()
+                            }
                         }
                         .buttonStyle(.plain)
+                        .padding(Theme.Spacing.xl)
+                        .background(
+                            Theme.Palette.surface,
+                            in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+                        )
+                        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
                         .cardRow()
                     }
                 }
 
-                if totalPages > 1 {
-                    Section("Seite \(currentPage + 1) von \(totalPages)") {
-                        PaginationFooter {
-                            HStack {
-                                Button {
-                                    Task { await load(page: currentPage - 1) }
-                                } label: {
-                                    Label("Zurück", systemImage: "chevron.left")
+                Section("Ansicht") {
+                    SectionCard {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                            Toggle("Abgelaufene anzeigen", isOn: $showExpired)
+                            Divider()
+                            Toggle("Entwürfe anzeigen", isOn: $showDrafts)
+                        }
+                    }
+                    .cardRow()
+                }
+
+                if isLoading && entries.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if entries.isEmpty {
+                    EmptyStateView(
+                        "list.clipboard",
+                        color: Theme.Palette.accent,
+                        title: "Keine Einträge",
+                        message: "Für diese Filter sind keine Führungsregister-Einträge vorhanden."
+                    )
+                } else {
+                    Section("\(totalCount) Einträge") {
+                        ForEach(entries) { entry in
+                            Button {
+                                selectedEntryID = entry.id
+                            } label: {
+                                conductRow(entry)
+                            }
+                            .buttonStyle(.plain)
+                            .cardRow()
+                        }
+                    }
+
+                    if totalPages > 1 {
+                        Section("Seite \(currentPage + 1) von \(totalPages)") {
+                            PaginationFooter {
+                                HStack {
+                                    Button {
+                                        Task { await load(page: currentPage - 1) }
+                                    } label: {
+                                        Label("Zurück", systemImage: "chevron.left")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(currentPage == 0 || isLoading)
+
+                                    Spacer()
+
+                                    if isLoading {
+                                        ProgressView()
+                                    }
+
+                                    Spacer()
+
+                                    Button {
+                                        Task { await load(page: currentPage + 1) }
+                                    } label: {
+                                        Label("Weiter", systemImage: "chevron.right")
+                                            .labelStyle(.titleAndIcon)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(currentPage + 1 >= totalPages || isLoading)
                                 }
-                                .buttonStyle(.borderless)
-                                .disabled(currentPage == 0 || isLoading)
-
-                                Spacer()
-
-                                if isLoading {
-                                    ProgressView()
-                                }
-
-                                Spacer()
-
-                                Button {
-                                    Task { await load(page: currentPage + 1) }
-                                } label: {
-                                    Label("Weiter", systemImage: "chevron.right")
-                                        .labelStyle(.titleAndIcon)
-                                }
-                                .buttonStyle(.borderless)
-                                .disabled(currentPage + 1 >= totalPages || isLoading)
                             }
                         }
                     }
                 }
             }
-        }
-        .cardListStyle()
-        .navigationTitle("Führungsregister")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(item: $selectedEntryID) { id in
-            ConductEntryDetailView(entryID: id)
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    ForEach(conductTypes, id: \.rawValue) { type in
-                        Button {
-                            selectedType = type
+            .cardListStyle()
+            .navigationTitle("Führungsregister")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        ForEach(conductTypes, id: \.rawValue) { type in
+                            Button {
+                                selectedType = type
+                                Task { await load(reset: true) }
+                            } label: {
+                                if selectedType == type {
+                                    Label(type.label, systemImage: type.icon)
+                                } else {
+                                    Text(type.label)
+                                }
+                            }
+                        }
+                        Button(role: .destructive) {
+                            selectedType = .unspecified
                             Task { await load(reset: true) }
                         } label: {
-                            if selectedType == type {
-                                Label(type.label, systemImage: type.icon)
-                            } else {
-                                Text(type.label)
-                            }
+                            Text("Alle anzeigen")
                         }
-                    }
-                    Button(role: .destructive) {
-                        selectedType = .unspecified
-                        Task { await load(reset: true) }
                     } label: {
-                        Text("Alle anzeigen")
+                        Label(filterLabel, systemImage: "line.3.horizontal.decrease.circle")
                     }
-                } label: {
-                    Label(filterLabel, systemImage: "line.3.horizontal.decrease.circle")
                 }
             }
-        }
-        .sheet(isPresented: $showCreateSheet) {
-            CreateConductEntrySheet(presetUserID: userID)
-                .environment(appState)
-        }
-        .onChange(of: showCreateSheet) {
-            if !showCreateSheet {
-                Task { await load(reset: true) }
+            .sheet(isPresented: $showCreateSheet) {
+                CreateConductEntrySheet(presetUserID: userID)
+                    .environment(appState)
+            }
+            .onChange(of: showCreateSheet) {
+                if !showCreateSheet {
+                    Task { await load(reset: true) }
+                }
+            }
+            .onChange(of: showExpired) { Task { await load(reset: true) } }
+            .onChange(of: showDrafts) { Task { await load(reset: true) } }
+            .refreshable { await load(reset: true) }
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                await load(reset: true)
             }
         }
-        .onChange(of: showExpired) { Task { await load(reset: true) } }
-        .onChange(of: showDrafts) { Task { await load(reset: true) } }
-        .refreshable { await load(reset: true) }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            await load(reset: true)
+        .navigationDestination(item: $selectedEntryID) { id in
+            ConductEntryDetailView(entryID: id)
         }
     }
 
@@ -830,97 +832,99 @@ struct JobInactiveColleaguesView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .cardRow()
-                }
-            }
-
-            Section("Zeitraum") {
-                SectionCard {
-                    Picker("Inaktiv seit", selection: $days) {
-                        ForEach([7, 14, 30] as [Int32], id: \.self) { value in
-                            Text("\(value) Tage").tag(value)
-                        }
-                    }
-                }
-                .cardRow()
-            }
-
-            if isLoading && colleagues.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if colleagues.isEmpty {
-                EmptyStateView(
-                    "person.crop.circle.badge.checkmark",
-                    color: Theme.Palette.accent,
-                    title: "Keine inaktiven Kollegen",
-                    message: "Alle Kollegen waren in diesem Zeitraum im Dienst."
-                )
-            } else {
-                Section("\(totalCount) inaktive Kollegen") {
-                    ForEach(colleagues) { colleague in
-                        Button {
-                            selectedColleagueID = colleague.userID
-                        } label: {
-                            inactiveRow(colleague)
-                        }
-                        .buttonStyle(.plain)
-                        .cardRow()
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
                     }
                 }
 
-                if totalPages > 1 {
-                    Section("Seite \(currentPage + 1) von \(totalPages)") {
-                        PaginationFooter {
-                            HStack {
-                                Button {
-                                    Task { await load(page: currentPage - 1) }
-                                } label: {
-                                    Label("Zurück", systemImage: "chevron.left")
+                Section("Zeitraum") {
+                    SectionCard {
+                        Picker("Inaktiv seit", selection: $days) {
+                            ForEach([7, 14, 30] as [Int32], id: \.self) { value in
+                                Text("\(value) Tage").tag(value)
+                            }
+                        }
+                    }
+                    .cardRow()
+                }
+
+                if isLoading && colleagues.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if colleagues.isEmpty {
+                    EmptyStateView(
+                        "person.crop.circle.badge.checkmark",
+                        color: Theme.Palette.accent,
+                        title: "Keine inaktiven Kollegen",
+                        message: "Alle Kollegen waren in diesem Zeitraum im Dienst."
+                    )
+                } else {
+                    Section("\(totalCount) inaktive Kollegen") {
+                        ForEach(colleagues) { colleague in
+                            Button {
+                                selectedColleagueID = colleague.userID
+                            } label: {
+                                inactiveRow(colleague)
+                            }
+                            .buttonStyle(.plain)
+                            .cardRow()
+                        }
+                    }
+
+                    if totalPages > 1 {
+                        Section("Seite \(currentPage + 1) von \(totalPages)") {
+                            PaginationFooter {
+                                HStack {
+                                    Button {
+                                        Task { await load(page: currentPage - 1) }
+                                    } label: {
+                                        Label("Zurück", systemImage: "chevron.left")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(currentPage == 0 || isLoading)
+
+                                    Spacer()
+
+                                    if isLoading {
+                                        ProgressView()
+                                    }
+
+                                    Spacer()
+
+                                    Button {
+                                        Task { await load(page: currentPage + 1) }
+                                    } label: {
+                                        Label("Weiter", systemImage: "chevron.right")
+                                            .labelStyle(.titleAndIcon)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(currentPage + 1 >= totalPages || isLoading)
                                 }
-                                .buttonStyle(.borderless)
-                                .disabled(currentPage == 0 || isLoading)
-
-                                Spacer()
-
-                                if isLoading {
-                                    ProgressView()
-                                }
-
-                                Spacer()
-
-                                Button {
-                                    Task { await load(page: currentPage + 1) }
-                                } label: {
-                                    Label("Weiter", systemImage: "chevron.right")
-                                        .labelStyle(.titleAndIcon)
-                                }
-                                .buttonStyle(.borderless)
-                                .disabled(currentPage + 1 >= totalPages || isLoading)
                             }
                         }
                     }
                 }
             }
+            .cardListStyle()
+            .navigationTitle("Inaktive Kollegen")
+            .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: days) {
+                Task { await load(reset: true) }
+            }
+            .refreshable { await load(reset: true) }
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                await load(reset: true)
+            }
         }
-        .cardListStyle()
-        .navigationTitle("Inaktive Kollegen")
-        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedColleagueID) { id in
             ColleagueDetailView(userID: id)
-        }
-        .onChange(of: days) {
-            Task { await load(reset: true) }
-        }
-        .refreshable { await load(reset: true) }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            await load(reset: true)
         }
     }
 

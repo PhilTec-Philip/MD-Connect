@@ -54,72 +54,93 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .cardRow()
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
+                    }
                 }
-            }
 
-            if let props {
-                Section {
-                    DetailHero(
-                        gradient: FiveNetModule.settings.gradient,
-                        icon: "gearshape.fill",
-                        title: jobTitle,
-                        subtitle: "Beruf-Einstellungen",
-                        badges: heroBadges(props)
-                    )
-                    .listRowInsets(EdgeInsets(
-                        top: 0,
-                        leading: Theme.Spacing.xl,
-                        bottom: 0,
-                        trailing: Theme.Spacing.xl
-                    ))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                if let props {
+                    Section {
+                        DetailHero(
+                            gradient: FiveNetModule.settings.gradient,
+                            icon: "gearshape.fill",
+                            title: jobTitle,
+                            subtitle: "Beruf-Einstellungen",
+                            badges: heroBadges(props)
+                        )
+                        .listRowInsets(EdgeInsets(
+                            top: 0,
+                            leading: Theme.Spacing.xl,
+                            bottom: 0,
+                            trailing: Theme.Spacing.xl
+                        ))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                    }
                 }
-            }
 
-            if isLoading && props == nil {
-                ForEach(0..<4, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if let props {
-                infoSection(props)
+                if isLoading && props == nil {
+                    ForEach(0..<4, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if let props {
+                    infoSection(props)
 
-                if canEdit {
-                    editSection(props)
+                    if canEdit {
+                        editSection(props)
+                    } else {
+                        Section {
+                            StatusLabelRow(
+                                "Du hast keine Berechtigung, diese Einstellungen zu bearbeiten.",
+                                systemImage: "lock.fill",
+                                tint: .secondary
+                            )
+                            .cardRow()
+                        }
+                    }
+
+                    moreSection(props)
                 } else {
                     Section {
-                        StatusLabelRow(
-                            "Du hast keine Berechtigung, diese Einstellungen zu bearbeiten.",
-                            systemImage: "lock.fill",
-                            tint: .secondary
+                        EmptyStateView(
+                            "gearshape",
+                            color: FiveNetModule.settings.tint,
+                            title: "Keine Einstellungen",
+                            message: "Für deinen Beruf konnten keine Einstellungen geladen werden."
                         )
                         .cardRow()
                     }
                 }
-
-                moreSection(props)
-            } else {
-                Section {
-                    EmptyStateView(
-                        "gearshape",
-                        color: FiveNetModule.settings.tint,
-                        title: "Keine Einstellungen",
-                        message: "Für deinen Beruf konnten keine Einstellungen geladen werden."
-                    )
-                    .cardRow()
+            }
+            .cardListStyle()
+            .moduleNavTitle(.settings)
+            .navConnectionDot()
+            .pendingAlarmBell()
+            .navigationBarTitleDisplayMode(.inline)
+            .task(id: props) {
+                seedIfNeeded()
+                if props == nil && !isLoading {
+                    await load()
                 }
             }
+            .confirmationDialog(
+                "Logo löschen?",
+                isPresented: $showDeleteLogoConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Löschen", role: .destructive) {
+                    deleteLogo()
+                }
+                Button("Abbrechen", role: .cancel) {}
+            } message: {
+                Text("Das Berufs-Logo wird vom Server entfernt.")
+            }
+            .toast(isPresented: $showSavedToast, message: "Einstellungen gespeichert", systemImage: "checkmark")
         }
-        .cardListStyle()
-        .moduleNavTitle(.settings)
-        .navConnectionDot()
-        .pendingAlarmBell()
-        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $subRoute) { route in
             switch route {
             case .roles:
@@ -144,25 +165,6 @@ struct SettingsView: View {
                 SettingsAboutView()
             }
         }
-        .task(id: props) {
-            seedIfNeeded()
-            if props == nil && !isLoading {
-                await load()
-            }
-        }
-        .confirmationDialog(
-            "Logo löschen?",
-            isPresented: $showDeleteLogoConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Löschen", role: .destructive) {
-                deleteLogo()
-            }
-            Button("Abbrechen", role: .cancel) {}
-        } message: {
-            Text("Das Berufs-Logo wird vom Server entfernt.")
-        }
-        .toast(isPresented: $showSavedToast, message: "Einstellungen gespeichert", systemImage: "checkmark")
     }
 
     // MARK: - Sections

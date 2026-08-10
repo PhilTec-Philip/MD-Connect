@@ -18,89 +18,91 @@ struct SettingsLawsView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .cardRow()
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
+                    }
                 }
-            }
 
-            if isLoading && books.isEmpty {
-                ForEach(0..<4, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if books.isEmpty {
-                Section {
-                    EmptyStateView(
-                        "scale.3d",
-                        color: FiveNetModule.settings.tint,
-                        title: "Keine Gesetzbücher",
-                        message: "Es wurden noch keine Gesetzbücher angelegt."
-                    )
-                    .cardRow()
-                }
-            } else {
-                Section {
-                    ForEach(books) { book in
-                        Button {
-                            selectedBookID = book.id
-                        } label: {
-                            SettingsLawBookRow(book: book)
-                        }
+                if isLoading && books.isEmpty {
+                    ForEach(0..<4, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if books.isEmpty {
+                    Section {
+                        EmptyStateView(
+                            "scale.3d",
+                            color: FiveNetModule.settings.tint,
+                            title: "Keine Gesetzbücher",
+                            message: "Es wurden noch keine Gesetzbücher angelegt."
+                        )
                         .cardRow()
-                        .swipeActions(edge: .trailing) {
-                            if canEdit {
-                                Button(role: .destructive) {
-                                    bookToDelete = book
-                                } label: {
-                                    Label("Löschen", systemImage: "trash")
+                    }
+                } else {
+                    Section {
+                        ForEach(books) { book in
+                            Button {
+                                selectedBookID = book.id
+                            } label: {
+                                SettingsLawBookRow(book: book)
+                            }
+                            .cardRow()
+                            .swipeActions(edge: .trailing) {
+                                if canEdit {
+                                    Button(role: .destructive) {
+                                        bookToDelete = book
+                                    } label: {
+                                        Label("Löschen", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-        .cardListStyle()
-        .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
-        .navigationTitle("Gesetzbücher")
-        .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
-        .toolbar {
-            if canEdit {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showCreateBook = true
-                    } label: {
-                        Image(systemName: "plus")
+            .cardListStyle()
+            .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
+            .navigationTitle("Gesetzbücher")
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await load() }
+            .toolbar {
+                if canEdit {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showCreateBook = true
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("Gesetzbuch erstellen")
                     }
-                    .accessibilityLabel("Gesetzbuch erstellen")
                 }
+            }
+            .sheet(isPresented: $showCreateBook) {
+                SettingsLawBookEditSheet(onSaved: {
+                    showCreateBook = false
+                    Task { await load() }
+                })
+            }
+            .confirmationDialog(
+                "Gesetzbuch löschen?",
+                isPresented: Binding(get: { bookToDelete != nil }, set: { if !$0 { bookToDelete = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Löschen", role: .destructive) {
+                    if let book = bookToDelete {
+                        deleteBook(book)
+                    }
+                }
+                Button("Abbrechen", role: .cancel) {}
+            } message: {
+                Text("Alle enthaltenen Gesetze werden ebenfalls entfernt.")
             }
         }
         .navigationDestination(item: $selectedBookID) { bookID in
             SettingsLawBookDetailView(bookID: bookID)
-        }
-        .sheet(isPresented: $showCreateBook) {
-            SettingsLawBookEditSheet(onSaved: {
-                showCreateBook = false
-                Task { await load() }
-            })
-        }
-        .confirmationDialog(
-            "Gesetzbuch löschen?",
-            isPresented: Binding(get: { bookToDelete != nil }, set: { if !$0 { bookToDelete = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("Löschen", role: .destructive) {
-                if let book = bookToDelete {
-                    deleteBook(book)
-                }
-            }
-            Button("Abbrechen", role: .cancel) {}
-        } message: {
-            Text("Alle enthaltenen Gesetze werden ebenfalls entfernt.")
         }
     }
 

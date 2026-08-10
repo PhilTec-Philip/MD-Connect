@@ -28,89 +28,91 @@ struct SettingsRolesView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .cardRow()
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
+                    }
                 }
-            }
 
-            if isLoading && roles.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if roles.isEmpty {
-                Section {
-                    EmptyStateView(
-                        "person.3.fill",
-                        color: FiveNetModule.settings.tint,
-                        title: "Keine Rollen",
-                        message: "Für deinen Beruf wurden noch keine Rollen eingerichtet."
-                    )
-                    .cardRow()
-                }
-            } else {
-                Section {
-                    ForEach(roles) { role in
-                        Button {
-                            selectedRoute = SettingsRoleRoute(roleID: role.id)
-                        } label: {
-                            SettingsRoleRow(role: role)
-                        }
+                if isLoading && roles.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if roles.isEmpty {
+                    Section {
+                        EmptyStateView(
+                            "person.3.fill",
+                            color: FiveNetModule.settings.tint,
+                            title: "Keine Rollen",
+                            message: "Für deinen Beruf wurden noch keine Rollen eingerichtet."
+                        )
                         .cardRow()
-                        .swipeActions(edge: .trailing) {
-                            if canDelete {
-                                Button(role: .destructive) {
-                                    roleToDelete = role
-                                } label: {
-                                    Label("Löschen", systemImage: "trash")
+                    }
+                } else {
+                    Section {
+                        ForEach(roles) { role in
+                            Button {
+                                selectedRoute = SettingsRoleRoute(roleID: role.id)
+                            } label: {
+                                SettingsRoleRow(role: role)
+                            }
+                            .cardRow()
+                            .swipeActions(edge: .trailing) {
+                                if canDelete {
+                                    Button(role: .destructive) {
+                                        roleToDelete = role
+                                    } label: {
+                                        Label("Löschen", systemImage: "trash")
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-        .cardListStyle()
-        .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
-        .navigationTitle("Rollen & Berechtigungen")
-        .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
-        .toolbar {
-            if canCreate {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showCreate = true
-                    } label: {
-                        Image(systemName: "plus")
+            .cardListStyle()
+            .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
+            .navigationTitle("Rollen & Berechtigungen")
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await load() }
+            .toolbar {
+                if canCreate {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showCreate = true
+                        } label: {
+                            Image(systemName: "plus")
+                        }
+                        .accessibilityLabel("Rolle erstellen")
                     }
-                    .accessibilityLabel("Rolle erstellen")
                 }
+            }
+            .sheet(isPresented: $showCreate) {
+                SettingsCreateRoleSheet(onCreated: {
+                    showCreate = false
+                    Task { await load() }
+                })
+            }
+            .confirmationDialog(
+                "Rolle löschen?",
+                isPresented: Binding(get: { roleToDelete != nil }, set: { if !$0 { roleToDelete = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Löschen", role: .destructive) {
+                    if let role = roleToDelete {
+                        delete(role)
+                    }
+                }
+                Button("Abbrechen", role: .cancel) {}
+            } message: {
+                Text("Die Rolle kann danach nicht mehr zugewiesen werden.")
             }
         }
         .navigationDestination(item: $selectedRoute) { route in
             SettingsRoleDetailView(roleID: route.roleID)
-        }
-        .sheet(isPresented: $showCreate) {
-            SettingsCreateRoleSheet(onCreated: {
-                showCreate = false
-                Task { await load() }
-            })
-        }
-        .confirmationDialog(
-            "Rolle löschen?",
-            isPresented: Binding(get: { roleToDelete != nil }, set: { if !$0 { roleToDelete = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("Löschen", role: .destructive) {
-                if let role = roleToDelete {
-                    delete(role)
-                }
-            }
-            Button("Abbrechen", role: .cancel) {}
-        } message: {
-            Text("Die Rolle kann danach nicht mehr zugewiesen werden.")
         }
     }
 

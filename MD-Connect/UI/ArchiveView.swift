@@ -25,116 +25,119 @@ struct ArchiveView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                SectionCard {
-                    HStack(spacing: Theme.Spacing.sm) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
-                        TextField("Dispatch-ID oder PLZ", text: $searchText)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                        if !searchText.isEmpty {
-                            Button {
-                                searchText = ""
-                                Task { await load(reset: true) }
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
+        Group {
+            List {
+                Section {
+                    SectionCard {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                            HStack(spacing: Theme.Spacing.sm) {
+                                Image(systemName: "magnifyingglass")
                                     .foregroundStyle(.secondary)
+                                TextField("Dispatch-ID oder PLZ", text: $searchText)
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                                if !searchText.isEmpty {
+                                    Button {
+                                        searchText = ""
+                                        Task { await load(reset: true) }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            Text("Es werden nur abgeschlossene Einsätze angezeigt.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .cardRow()
+                }
+
+                if isLoading && dispatches.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if let errorMessage, dispatches.isEmpty {
+                    EmptyStateView(
+                        "exclamationmark.triangle",
+                        color: Theme.Palette.danger,
+                        title: "Laden fehlgeschlagen",
+                        message: errorMessage,
+                        actionTitle: "Erneut versuchen"
+                    ) {
+                        Task { await load(reset: true) }
+                    }
+                } else if dispatches.isEmpty {
+                    EmptyStateView(
+                        "archivebox",
+                        color: Theme.Palette.accent,
+                        title: "Keine Einsätze gefunden",
+                        message: "Für diese Suche sind keine Einsätze vorhanden."
+                    )
+                } else {
+                    Section("\(totalCount) Einsätze gefunden") {
+                        ForEach(dispatches) { dispatch in
+                            Button {
+                                selectedDispatchID = dispatch.id
+                            } label: {
+                                ArchiveDispatchRow(dispatch: dispatch)
                             }
                             .buttonStyle(.plain)
+                            .cardRow()
                         }
                     }
-                }
-                .cardRow()
-            } footer: {
-                Text("Es werden nur abgeschlossene Einsätze angezeigt.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
 
-            if isLoading && dispatches.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if let errorMessage, dispatches.isEmpty {
-                EmptyStateView(
-                    "exclamationmark.triangle",
-                    color: Theme.Palette.danger,
-                    title: "Laden fehlgeschlagen",
-                    message: errorMessage,
-                    actionTitle: "Erneut versuchen"
-                ) {
-                    Task { await load(reset: true) }
-                }
-            } else if dispatches.isEmpty {
-                EmptyStateView(
-                    "archivebox",
-                    color: Theme.Palette.accent,
-                    title: "Keine Einsätze gefunden",
-                    message: "Für diese Suche sind keine Einsätze vorhanden."
-                )
-            } else {
-                Section("\(totalCount) Einsätze gefunden") {
-                    ForEach(dispatches) { dispatch in
-                        Button {
-                            selectedDispatchID = dispatch.id
-                        } label: {
-                            ArchiveDispatchRow(dispatch: dispatch)
-                        }
-                        .buttonStyle(.plain)
-                        .cardRow()
-                    }
-                }
+                    if totalPages > 1 {
+                        Section("Seite \(currentPage + 1) von \(totalPages)") {
+                            PaginationFooter {
+                                HStack {
+                                    Button {
+                                        Task { await load(page: currentPage - 1) }
+                                    } label: {
+                                        Label("Zurück", systemImage: "chevron.left")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(currentPage == 0 || isLoading)
 
-                if totalPages > 1 {
-                    Section("Seite \(currentPage + 1) von \(totalPages)") {
-                        PaginationFooter {
-                            HStack {
-                                Button {
-                                    Task { await load(page: currentPage - 1) }
-                                } label: {
-                                    Label("Zurück", systemImage: "chevron.left")
+                                    Spacer()
+
+                                    if isLoading {
+                                        ProgressView()
+                                    }
+
+                                    Spacer()
+
+                                    Button {
+                                        Task { await load(page: currentPage + 1) }
+                                    } label: {
+                                        Label("Weiter", systemImage: "chevron.right")
+                                            .labelStyle(.titleAndIcon)
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(currentPage + 1 >= totalPages || isLoading)
                                 }
-                                .buttonStyle(.borderless)
-                                .disabled(currentPage == 0 || isLoading)
-
-                                Spacer()
-
-                                if isLoading {
-                                    ProgressView()
-                                }
-
-                                Spacer()
-
-                                Button {
-                                    Task { await load(page: currentPage + 1) }
-                                } label: {
-                                    Label("Weiter", systemImage: "chevron.right")
-                                        .labelStyle(.titleAndIcon)
-                                }
-                                .buttonStyle(.borderless)
-                                .disabled(currentPage + 1 >= totalPages || isLoading)
                             }
                         }
                     }
                 }
             }
+            .cardListStyle()
+            .onChange(of: searchText) {
+                Task { await load(reset: true) }
+            }
+            .refreshable {
+                await load(reset: true)
+            }
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                await load(reset: true)
+            }
         }
-        .cardListStyle()
         .navigationDestination(item: $selectedDispatchID) { id in
             DispatchDetailView(dispatchID: id)
-        }
-        .onChange(of: searchText) {
-            Task { await load(reset: true) }
-        }
-        .refreshable {
-            await load(reset: true)
-        }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            await load(reset: true)
         }
     }
 

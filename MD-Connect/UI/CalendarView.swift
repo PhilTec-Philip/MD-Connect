@@ -154,99 +154,101 @@ struct CalendarView: View {
     }
 
     var body: some View {
-        List {
-            if isLoading && absences.isEmpty && events.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if let errorMessage, absences.isEmpty && events.isEmpty {
-                EmptyStateView(
-                    "exclamationmark.triangle",
-                    color: Theme.Palette.danger,
-                    title: "Laden fehlgeschlagen",
-                    message: errorMessage,
-                    actionTitle: "Erneut versuchen"
-                ) {
-                    Task { await load() }
-                }
-            } else {
-                Section {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-                        monthNav
-                        weekdayHeader
-                        dayGrid
-                        legend
+        Group {
+            List {
+                if isLoading && absences.isEmpty && events.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
                     }
-                    .padding(Theme.Spacing.lg)
-                    .background(
-                        Theme.Palette.surface,
-                        in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-                    )
-                    .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-                    .cardRow()
-                } header: {
-                    SectionHeader("Übersicht")
-                }
-
-                Section {
-                    if selectedList.isEmpty {
-                        SectionCard {
-                            Text("Keine Abwesenheiten oder Einträge für diesen Tag.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                } else if let errorMessage, absences.isEmpty && events.isEmpty {
+                    EmptyStateView(
+                        "exclamationmark.triangle",
+                        color: Theme.Palette.danger,
+                        title: "Laden fehlgeschlagen",
+                        message: errorMessage,
+                        actionTitle: "Erneut versuchen"
+                    ) {
+                        Task { await load() }
+                    }
+                } else {
+                    Section {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                            monthNav
+                            weekdayHeader
+                            dayGrid
+                            legend
                         }
+                        .padding(Theme.Spacing.lg)
+                        .background(
+                            Theme.Palette.surface,
+                            in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+                        )
+                        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
                         .cardRow()
-                    } else {
-                        ForEach(selectedList) { item in
-                            switch item {
-                            case .absence(let absence):
-                                Button {
-                                    selectedColleagueID = absence.colleague.userID
-                                } label: {
-                                    CalendarRow(
-                                        icon: "person.crop.circle.fill",
-                                        color: Theme.Palette.warning,
-                                        title: absence.name,
-                                        subtitle: "Abwesenheit · \(absence.rangeText)",
-                                        showsChevron: true
-                                    )
+                    } header: {
+                        SectionHeader("Übersicht")
+                    }
+
+                    Section {
+                        if selectedList.isEmpty {
+                            SectionCard {
+                                Text("Keine Abwesenheiten oder Einträge für diesen Tag.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .cardRow()
+                        } else {
+                            ForEach(selectedList) { item in
+                                switch item {
+                                case .absence(let absence):
+                                    Button {
+                                        selectedColleagueID = absence.colleague.userID
+                                    } label: {
+                                        CalendarRow(
+                                            icon: "person.crop.circle.fill",
+                                            color: Theme.Palette.warning,
+                                            title: absence.name,
+                                            subtitle: "Abwesenheit · \(absence.rangeText)",
+                                            showsChevron: true
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .cardRow()
+                                case .event(let event):
+                                    Button {
+                                        selectedEvent = event
+                                    } label: {
+                                        CalendarRow(
+                                            icon: event.isBirthday ? "gift.fill" : "calendar",
+                                            color: event.color,
+                                            title: event.title,
+                                            subtitle: event.timeText + (event.calendarName.isEmpty ? "" : " · \(event.calendarName)")
+                                        )
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .cardRow()
                                 }
-                                .buttonStyle(.plain)
-                                .cardRow()
-                            case .event(let event):
-                                Button {
-                                    selectedEvent = event
-                                } label: {
-                                    CalendarRow(
-                                        icon: event.isBirthday ? "gift.fill" : "calendar",
-                                        color: event.color,
-                                        title: event.title,
-                                        subtitle: event.timeText + (event.calendarName.isEmpty ? "" : " · \(event.calendarName)")
-                                    )
-                                }
-                                .buttonStyle(.borderless)
-                                .cardRow()
                             }
                         }
+                    } header: {
+                        SectionHeader(dayTitle)
                     }
-                } header: {
-                    SectionHeader(dayTitle)
                 }
             }
+            .cardListStyle()
+            .pendingAlarmBell()
+            .moduleNavTitle(.calendar)
+            .navConnectionDot()
+            .task { await load() }
+            .onChange(of: visibleMonth) {
+                Task { await loadEntries() }
+            }
+            .sheet(item: $selectedEvent) { event in
+                CalendarEventDetailSheet(event: event)
+            }
         }
-        .cardListStyle()
-        .pendingAlarmBell()
-        .moduleNavTitle(.calendar)
-        .navConnectionDot()
         .navigationDestination(item: $selectedColleagueID) { userID in
             ColleagueDetailView(userID: userID)
-        }
-        .task { await load() }
-        .onChange(of: visibleMonth) {
-            Task { await loadEntries() }
-        }
-        .sheet(item: $selectedEvent) { event in
-            CalendarEventDetailSheet(event: event)
         }
     }
 

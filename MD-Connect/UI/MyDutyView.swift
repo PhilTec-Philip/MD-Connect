@@ -28,13 +28,18 @@ struct MyDutyView: View {
     @State private var selectedRoute: DutyRoute?
 
     var body: some View {
-        List {
-            unitSection
-            dispatchSection
+        Group {
+            List {
+                unitSection
+                dispatchSection
+            }
+            .cardListStyle()
+            .navigationTitle("Meine Einheit")
+            .navigationBarTitleDisplayMode(.inline)
+            .refreshable {
+                await appState.loadCentrum()
+            }
         }
-        .cardListStyle()
-        .navigationTitle("Meine Einheit")
-        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedRoute) { route in
             switch route {
             case .unit(let id):
@@ -42,9 +47,6 @@ struct MyDutyView: View {
             case .dispatch(let id):
                 DispatchDetailView(dispatchID: id)
             }
-        }
-        .refreshable {
-            await appState.loadCentrum()
         }
     }
 

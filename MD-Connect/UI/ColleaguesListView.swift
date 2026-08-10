@@ -26,142 +26,144 @@ struct ColleaguesListView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .cardRow()
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
+                    }
                 }
-            }
 
-            if isLoading && colleagues.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if let errorMessage, colleagues.isEmpty {
-                EmptyStateView(
-                    "exclamationmark.triangle",
-                    color: Theme.Palette.danger,
-                    title: "Laden fehlgeschlagen",
-                    message: errorMessage,
-                    actionTitle: "Erneut versuchen"
-                ) {
-                    Task { await load(reset: true) }
-                }
-            } else if colleagues.isEmpty {
-                EmptyStateView(
-                    "person.2",
-                    color: Theme.Palette.accent,
-                    title: "Keine Kollegen gefunden",
-                    message: "Für diese Filter sind keine Kollegen vorhanden."
-                )
-            } else {
-                Section("\(totalCount) Kollegen gefunden") {
-                    ForEach(colleagues) { colleague in
-                        Button {
-                            selectedColleagueID = colleague.userID
-                        } label: {
-                            ListCardRow {
-                                ColleagueRow(colleague: colleague)
+                if isLoading && colleagues.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if let errorMessage, colleagues.isEmpty {
+                    EmptyStateView(
+                        "exclamationmark.triangle",
+                        color: Theme.Palette.danger,
+                        title: "Laden fehlgeschlagen",
+                        message: errorMessage,
+                        actionTitle: "Erneut versuchen"
+                    ) {
+                        Task { await load(reset: true) }
+                    }
+                } else if colleagues.isEmpty {
+                    EmptyStateView(
+                        "person.2",
+                        color: Theme.Palette.accent,
+                        title: "Keine Kollegen gefunden",
+                        message: "Für diese Filter sind keine Kollegen vorhanden."
+                    )
+                } else {
+                    Section("\(totalCount) Kollegen gefunden") {
+                        ForEach(colleagues) { colleague in
+                            Button {
+                                selectedColleagueID = colleague.userID
+                            } label: {
+                                ListCardRow {
+                                    ColleagueRow(colleague: colleague)
+                                }
                             }
+                            .buttonStyle(.plain)
+                            .cardRow()
                         }
-                        .buttonStyle(.plain)
+                    }
+                }
+
+                if totalPages > 1 {
+                    Section("Seite \(currentPage + 1) von \(totalPages)") {
+                        HStack {
+                            Button {
+                                Task { await load(page: currentPage - 1) }
+                            } label: {
+                                Label("Zurück", systemImage: "chevron.left")
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(currentPage == 0 || isLoading)
+
+                            Spacer()
+
+                            if isLoading {
+                                ProgressView()
+                            }
+
+                            Spacer()
+
+                            Button {
+                                Task { await load(page: currentPage + 1) }
+                            } label: {
+                                Label("Weiter", systemImage: "chevron.right")
+                                    .labelStyle(.titleAndIcon)
+                            }
+                            .buttonStyle(.borderless)
+                            .disabled(currentPage + 1 >= totalPages || isLoading)
+                        }
+                        .padding(Theme.Spacing.xl)
+                        .background(Theme.Palette.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
                         .cardRow()
                     }
                 }
             }
-
-            if totalPages > 1 {
-                Section("Seite \(currentPage + 1) von \(totalPages)") {
-                    HStack {
-                        Button {
-                            Task { await load(page: currentPage - 1) }
-                        } label: {
-                            Label("Zurück", systemImage: "chevron.left")
-                        }
-                        .buttonStyle(.borderless)
-                        .disabled(currentPage == 0 || isLoading)
-
-                        Spacer()
-
-                        if isLoading {
-                            ProgressView()
-                        }
-
-                        Spacer()
-
-                        Button {
-                            Task { await load(page: currentPage + 1) }
-                        } label: {
-                            Label("Weiter", systemImage: "chevron.right")
-                                .labelStyle(.titleAndIcon)
-                        }
-                        .buttonStyle(.borderless)
-                        .disabled(currentPage + 1 >= totalPages || isLoading)
+            .cardListStyle()
+            .searchable(text: $searchText, prompt: "Name suchen")
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    NavigationLink {
+                        JobsLabelsView()
+                    } label: {
+                        Label("Labels", systemImage: "tag")
                     }
-                    .padding(Theme.Spacing.xl)
-                    .background(Theme.Palette.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
-                    .cardRow()
+                    Toggle("Nur abwesend", isOn: $onlyAbsent)
+                        .toggleStyle(.button)
+                        .labelStyle(.titleOnly)
                 }
             }
-        }
-        .cardListStyle()
-        .searchable(text: $searchText, prompt: "Name suchen")
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                NavigationLink {
-                    JobsLabelsView()
-                } label: {
-                    Label("Labels", systemImage: "tag")
+            .safeAreaInset(edge: .bottom) {
+                if !labels.isEmpty {
+                    labelFilterBar
                 }
-                Toggle("Nur abwesend", isOn: $onlyAbsent)
-                    .toggleStyle(.button)
-                    .labelStyle(.titleOnly)
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            if !labels.isEmpty {
-                labelFilterBar
-            }
-        }
-        .onChange(of: searchText) {
-            searchTask?.cancel()
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if query.isEmpty {
-                searchTask = Task { @MainActor in
+            .onChange(of: searchText) {
+                searchTask?.cancel()
+                let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if query.isEmpty {
+                    searchTask = Task { @MainActor in
+                        await load(reset: true)
+                    }
+                    return
+                }
+                let task = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard !Task.isCancelled else { return }
                     await load(reset: true)
                 }
-                return
+                searchTask = task
             }
-            let task = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                guard !Task.isCancelled else { return }
+            .onChange(of: onlyAbsent) {
+                Task { await load(reset: true) }
+            }
+            .onChange(of: selectedLabelIDs) {
+                Task { await load(reset: true) }
+            }
+            .refreshable {
                 await load(reset: true)
             }
-            searchTask = task
+            .navigationTitle("Kollegen")
+            .navigationBarTitleDisplayMode(.inline)
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                async let labelsLoad: Void = loadLabels()
+                async let colleaguesLoad: Void = load(reset: true)
+                _ = await (labelsLoad, colleaguesLoad)
+            }
         }
-        .onChange(of: onlyAbsent) {
-            Task { await load(reset: true) }
-        }
-        .onChange(of: selectedLabelIDs) {
-            Task { await load(reset: true) }
-        }
-        .refreshable {
-            await load(reset: true)
-        }
-        .navigationTitle("Kollegen")
-        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selectedColleagueID) { userID in
             ColleagueDetailView(userID: userID)
-        }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            async let labelsLoad: Void = loadLabels()
-            async let colleaguesLoad: Void = load(reset: true)
-            _ = await (labelsLoad, colleaguesLoad)
         }
     }
 

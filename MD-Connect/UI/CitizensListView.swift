@@ -23,105 +23,107 @@ struct CitizensListView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .cardRow()
-                }
-            }
-
-            if isLoading && citizens.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if let errorMessage, citizens.isEmpty {
-                EmptyStateView(
-                    "exclamationmark.triangle",
-                    color: Theme.Palette.danger,
-                    title: "Laden fehlgeschlagen",
-                    message: errorMessage,
-                    actionTitle: "Erneut versuchen"
-                ) {
-                    Task { await load(reset: true) }
-                }
-            } else if citizens.isEmpty {
-                EmptyStateView(
-                    "person.2",
-                    color: Theme.Palette.accent,
-                    title: "Keine Bürger gefunden",
-                    message: "Für diese Suche sind keine Bürger vorhanden."
-                )
-            } else {
-                Section("\(totalCount) Bürger gefunden") {
-                    ForEach(citizens) { citizen in
-                        Button {
-                            selectedCitizen = citizen
-                        } label: {
-                            ListCardRow {
-                                CitizenRow(user: citizen, identifierFormat: identifierFormat)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .cardRow()
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
                     }
                 }
 
-                if totalPages > 1 {
-                    Section("Seite \(currentPage + 1) von \(totalPages)") {
-                        HStack {
+                if isLoading && citizens.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if let errorMessage, citizens.isEmpty {
+                    EmptyStateView(
+                        "exclamationmark.triangle",
+                        color: Theme.Palette.danger,
+                        title: "Laden fehlgeschlagen",
+                        message: errorMessage,
+                        actionTitle: "Erneut versuchen"
+                    ) {
+                        Task { await load(reset: true) }
+                    }
+                } else if citizens.isEmpty {
+                    EmptyStateView(
+                        "person.2",
+                        color: Theme.Palette.accent,
+                        title: "Keine Bürger gefunden",
+                        message: "Für diese Suche sind keine Bürger vorhanden."
+                    )
+                } else {
+                    Section("\(totalCount) Bürger gefunden") {
+                        ForEach(citizens) { citizen in
                             Button {
-                                Task { await load(page: currentPage - 1) }
+                                selectedCitizen = citizen
                             } label: {
-                                Label("Zurück", systemImage: "chevron.left")
+                                ListCardRow {
+                                    CitizenRow(user: citizen, identifierFormat: identifierFormat)
+                                }
                             }
-                            .buttonStyle(.borderless)
-                            .disabled(currentPage == 0 || isLoading)
-
-                            Spacer()
-
-                            if isLoading {
-                                ProgressView()
-                            }
-
-                            Spacer()
-
-                            Button {
-                                Task { await load(page: currentPage + 1) }
-                            } label: {
-                                Label("Weiter", systemImage: "chevron.right")
-                                    .labelStyle(.titleAndIcon)
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(currentPage + 1 >= totalPages || isLoading)
+                            .buttonStyle(.plain)
+                            .cardRow()
                         }
-                        .padding(Theme.Spacing.xl)
-                        .background(Theme.Palette.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
-                        .cardRow()
+                    }
+
+                    if totalPages > 1 {
+                        Section("Seite \(currentPage + 1) von \(totalPages)") {
+                            HStack {
+                                Button {
+                                    Task { await load(page: currentPage - 1) }
+                                } label: {
+                                    Label("Zurück", systemImage: "chevron.left")
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(currentPage == 0 || isLoading)
+
+                                Spacer()
+
+                                if isLoading {
+                                    ProgressView()
+                                }
+
+                                Spacer()
+
+                                Button {
+                                    Task { await load(page: currentPage + 1) }
+                                } label: {
+                                    Label("Weiter", systemImage: "chevron.right")
+                                        .labelStyle(.titleAndIcon)
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(currentPage + 1 >= totalPages || isLoading)
+                            }
+                            .padding(Theme.Spacing.xl)
+                            .background(Theme.Palette.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
+                            .cardRow()
+                        }
                     }
                 }
             }
+            .cardListStyle()
+            .searchable(text: $searchText, prompt: "Name oder CIT suchen")
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .onChange(of: searchText) {
+                Task { await load(reset: true) }
+            }
+            .refreshable {
+                await load(reset: true)
+            }
+            .pendingAlarmBell()
+            .moduleNavTitle(.citizens)
+            .navConnectionDot()
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                await load(reset: true)
+            }
         }
-        .cardListStyle()
-        .searchable(text: $searchText, prompt: "Name oder CIT suchen")
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
-        .onChange(of: searchText) {
-            Task { await load(reset: true) }
-        }
-        .refreshable {
-            await load(reset: true)
-        }
-        .pendingAlarmBell()
-        .moduleNavTitle(.citizens)
-        .navConnectionDot()
         .navigationDestination(item: $selectedCitizen) { citizen in
             CitizenDetailView(userID: citizen.userID)
-        }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            await load(reset: true)
         }
     }
 

@@ -10,6 +10,7 @@ struct UnitDetailView: View {
     @State private var activity: [Resources_Centrum_Units_UnitStatus] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var errorText: String?
     @State private var selectedStatus: Resources_Centrum_Units_StatusUnit = .available
     @State private var showStatusPicker = false
 
@@ -40,6 +41,14 @@ struct UnitDetailView: View {
         }
         .sheet(isPresented: $showStatusPicker) {
             statusSheet
+        }
+        .alert("Fehler", isPresented: Binding(
+            get: { errorText != nil },
+            set: { if !$0 { errorText = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorText ?? "")
         }
     }
 
@@ -76,6 +85,18 @@ struct UnitDetailView: View {
                 }
             } footer: {
                 Text("Setzt den Status der Einheit (z. B. verfügbar, Pause, beschäftigt).")
+            }
+
+            if unit.id != appState.ownUnitID {
+                Section {
+                    Button {
+                        Task { await joinUnit(unit) }
+                    } label: {
+                        Label("Einheit beitreten", systemImage: "person.badge.plus")
+                    }
+                } footer: {
+                    Text("Tritt dieser Einheit bei, um Status-Updates und Einsatz-Meldungen zu empfangen.")
+                }
             }
 
             if unit.id == appState.ownUnitID {
@@ -155,7 +176,20 @@ struct UnitDetailView: View {
 
     private func leaveUnit(_ unit: Resources_Centrum_Units_Unit) async {
         await appState.leaveUnit(unit.id)
-        await load()
+        if let error = appState.centrumError {
+            errorText = error
+        } else {
+            await load()
+        }
+    }
+
+    private func joinUnit(_ unit: Resources_Centrum_Units_Unit) async {
+        await appState.joinUnit(unit.id)
+        if let error = appState.centrumError {
+            errorText = error
+        } else {
+            await load()
+        }
     }
 
     private func memberName(_ member: Resources_Centrum_Units_UnitAssignment) -> String {

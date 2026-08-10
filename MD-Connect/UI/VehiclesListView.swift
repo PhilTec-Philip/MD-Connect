@@ -22,105 +22,107 @@ struct VehiclesListView: View {
     }
 
     var body: some View {
-        List {
-            if let errorMessage {
-                Section {
-                    StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .cardRow()
-                }
-            }
-
-            if isLoading && vehicles.isEmpty {
-                ForEach(0..<5, id: \.self) { _ in
-                    SkeletonListRow()
-                }
-            } else if let errorMessage, vehicles.isEmpty {
-                EmptyStateView(
-                    "exclamationmark.triangle",
-                    color: Theme.Palette.danger,
-                    title: "Laden fehlgeschlagen",
-                    message: errorMessage,
-                    actionTitle: "Erneut versuchen"
-                ) {
-                    Task { await load(reset: true) }
-                }
-            } else if vehicles.isEmpty {
-                EmptyStateView(
-                    "car",
-                    color: Theme.Palette.accent,
-                    title: "Keine Fahrzeuge gefunden",
-                    message: "Für diese Suche sind keine Fahrzeuge vorhanden."
-                )
-            } else {
-                Section("\(totalCount) Fahrzeuge gefunden") {
-                    ForEach(vehicles, id: \.plate) { vehicle in
-                        Button {
-                            selectedPlate = vehicle.plate
-                        } label: {
-                            ListCardRow {
-                                VehicleRow(vehicle: vehicle)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .cardRow()
+        Group {
+            List {
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .cardRow()
                     }
                 }
 
-                if totalPages > 1 {
-                    Section("Seite \(currentPage + 1) von \(totalPages)") {
-                        HStack {
+                if isLoading && vehicles.isEmpty {
+                    ForEach(0..<5, id: \.self) { _ in
+                        SkeletonListRow()
+                    }
+                } else if let errorMessage, vehicles.isEmpty {
+                    EmptyStateView(
+                        "exclamationmark.triangle",
+                        color: Theme.Palette.danger,
+                        title: "Laden fehlgeschlagen",
+                        message: errorMessage,
+                        actionTitle: "Erneut versuchen"
+                    ) {
+                        Task { await load(reset: true) }
+                    }
+                } else if vehicles.isEmpty {
+                    EmptyStateView(
+                        "car",
+                        color: Theme.Palette.accent,
+                        title: "Keine Fahrzeuge gefunden",
+                        message: "Für diese Suche sind keine Fahrzeuge vorhanden."
+                    )
+                } else {
+                    Section("\(totalCount) Fahrzeuge gefunden") {
+                        ForEach(vehicles, id: \.plate) { vehicle in
                             Button {
-                                Task { await load(page: currentPage - 1) }
+                                selectedPlate = vehicle.plate
                             } label: {
-                                Label("Zurück", systemImage: "chevron.left")
+                                ListCardRow {
+                                    VehicleRow(vehicle: vehicle)
+                                }
                             }
-                            .buttonStyle(.borderless)
-                            .disabled(currentPage == 0 || isLoading)
-
-                            Spacer()
-
-                            if isLoading {
-                                ProgressView()
-                            }
-
-                            Spacer()
-
-                            Button {
-                                Task { await load(page: currentPage + 1) }
-                            } label: {
-                                Label("Weiter", systemImage: "chevron.right")
-                                    .labelStyle(.titleAndIcon)
-                            }
-                            .buttonStyle(.borderless)
-                            .disabled(currentPage + 1 >= totalPages || isLoading)
+                            .buttonStyle(.plain)
+                            .cardRow()
                         }
-                        .padding(Theme.Spacing.xl)
-                        .background(Theme.Palette.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
-                        .cardRow()
+                    }
+
+                    if totalPages > 1 {
+                        Section("Seite \(currentPage + 1) von \(totalPages)") {
+                            HStack {
+                                Button {
+                                    Task { await load(page: currentPage - 1) }
+                                } label: {
+                                    Label("Zurück", systemImage: "chevron.left")
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(currentPage == 0 || isLoading)
+
+                                Spacer()
+
+                                if isLoading {
+                                    ProgressView()
+                                }
+
+                                Spacer()
+
+                                Button {
+                                    Task { await load(page: currentPage + 1) }
+                                } label: {
+                                    Label("Weiter", systemImage: "chevron.right")
+                                        .labelStyle(.titleAndIcon)
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(currentPage + 1 >= totalPages || isLoading)
+                            }
+                            .padding(Theme.Spacing.xl)
+                            .background(Theme.Palette.surface, in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous))
+                            .cardRow()
+                        }
                     }
                 }
             }
+            .cardListStyle()
+            .searchable(text: $searchText, prompt: "Kennzeichen, Modell oder Besitzer suchen")
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .onChange(of: searchText) {
+                Task { await load(reset: true) }
+            }
+            .refreshable {
+                await load(reset: true)
+            }
+            .pendingAlarmBell()
+            .moduleNavTitle(.vehicles)
+            .navConnectionDot()
+            .task {
+                guard !hasLoaded else { return }
+                hasLoaded = true
+                await load(reset: true)
+            }
         }
-        .cardListStyle()
-        .searchable(text: $searchText, prompt: "Kennzeichen, Modell oder Besitzer suchen")
-        .autocorrectionDisabled()
-        .textInputAutocapitalization(.never)
-        .onChange(of: searchText) {
-            Task { await load(reset: true) }
-        }
-        .refreshable {
-            await load(reset: true)
-        }
-        .pendingAlarmBell()
-        .moduleNavTitle(.vehicles)
-        .navConnectionDot()
         .navigationDestination(item: $selectedPlate) { plate in
             VehicleDetailView(plate: plate)
-        }
-        .task {
-            guard !hasLoaded else { return }
-            hasLoaded = true
-            await load(reset: true)
         }
     }
 

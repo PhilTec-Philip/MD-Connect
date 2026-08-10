@@ -14,7 +14,7 @@ struct OverviewView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
-                    header
+                    AppHeader()
 
                     if let name = characterName {
                         profileHero(name: name, job: jobLine)
@@ -29,7 +29,7 @@ struct OverviewView: View {
                             HStack(spacing: Theme.Spacing.lg) {
                                 ForEach(quick) { module in
                                     NavigationLink(value: module) {
-                                        QuickAccessTile(module: module)
+                                        QuickAccessTile(module)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -58,30 +58,7 @@ struct OverviewView: View {
             }
             .background(Theme.Palette.background.ignoresSafeArea())
             .navigationDestination(for: FiveNetModule.self) { module in
-                switch module {
-                case .centrum:
-                    CentrumView()
-                case .livemap:
-                    LiveMapView()
-                case .wiki:
-                    WikiView()
-                case .citizens:
-                    CitizensListView()
-                case .vehicles:
-                    VehiclesListView()
-                case .documents:
-                    DocumentsListView()
-                case .jobs:
-                    JobsView()
-                case .qualifications:
-                    QualificationsView()
-                case .calendar:
-                    CalendarView()
-                case .mailer:
-                    MailView()
-                case .settings:
-                    SettingsView()
-                }
+                moduleRootView(module)
             }
             .navigationDestination(for: CitizenRoute.self) { route in
                 CitizenDetailView(userID: route.userID)
@@ -110,45 +87,6 @@ struct OverviewView: View {
         }
     }
 
-    /// Konten-Menü (drei Punkte) oben rechts: Charakter wechseln, Server
-    /// wechseln, Abmelden. Als Toolbar-Item, damit es zuverlässig reagiert.
-    private var accountMenu: some View {
-        Menu {
-            Button {
-                appState.switchCharacter()
-            } label: {
-                Label("Charakter wechseln", systemImage: "arrow.triangle.2.circlepath")
-            }
-            Button {
-                appState.changeServer()
-            } label: {
-                Label("Server wechseln", systemImage: "server.rack")
-            }
-            Button(role: .destructive) {
-                Task { await appState.logout() }
-            } label: {
-                Label("Abmelden", systemImage: "rectangle.portrait.and.arrow.right")
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(.title3)
-        }
-    }
-
-    /// Verbindungsstatus mit Text direkt neben dem Punkt — als Teil der
-    /// Content-Header-Zeile neben „FiveNet", damit Status und Menü in einer
-    /// Zeile liegen (kein Kasten in der Navigationsleiste mehr).
-    private var connectionLabel: some View {
-        HStack(spacing: Theme.Spacing.xs) {
-            Circle()
-                .fill(appState.isChannelConnected ? Theme.Palette.success : Theme.Palette.warning)
-                .frame(width: 9, height: 9)
-            Text(appState.isChannelConnected ? "Verbunden" : "Verbindung …")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     /// Binding to the current dispatch alarm, if any. `fullScreenCover(item:)`
     /// dismisses it by setting the binding to `nil`.
     private var alarmBinding: Binding<DispatchAlarm?> {
@@ -160,22 +98,6 @@ struct OverviewView: View {
                 }
             }
         )
-    }
-
-    private var header: some View {
-        HStack(spacing: Theme.Spacing.md) {
-            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-                Text("MD-Connect")
-                    .font(Theme.Typography.headline)
-                Text(appState.session.serverURL?.host ?? "")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            connectionLabel
-            accountMenu
-        }
-        .zIndex(2)
     }
 
     /// Schnellzugriff-Module in festgelegter Reihenfolge, gefiltert auf die
@@ -266,9 +188,18 @@ struct OverviewView: View {
 }
 
 /// Kompakte Schnellzugriffs-Kachel für den horizontalen Bereich der Startseite:
-/// Verlaufs-Icon-Kachel + Titel.
-private struct QuickAccessTile: View {
+/// Verlaufs-Icon-Kachel + Titel. Breite/Hintergrund konfigurierbar, damit lange
+/// Modultitel nicht abgeschnitten werden.
+struct QuickAccessTile: View {
     let module: FiveNetModule
+    var width: CGFloat = 68
+    var showsBackground = false
+
+    init(_ module: FiveNetModule, width: CGFloat = 68, showsBackground: Bool = false) {
+        self.module = module
+        self.width = width
+        self.showsBackground = showsBackground
+    }
 
     var body: some View {
         VStack(spacing: Theme.Spacing.sm) {
@@ -285,13 +216,20 @@ private struct QuickAccessTile: View {
             Text(module.title)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.primary)
-                .lineLimit(1)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
         }
-        .frame(width: 68)
+        .frame(width: width)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(
+            showsBackground ? Theme.Palette.surface : .clear,
+            in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+        )
     }
 }
 
-private struct ModuleCard: View {
+struct ModuleCard: View {
     let module: FiveNetModule
 
     var body: some View {
