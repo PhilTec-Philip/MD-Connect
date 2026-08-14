@@ -25,8 +25,6 @@ struct MyDutyView: View {
         }
     }
 
-    @State private var selectedRoute: DutyRoute?
-
     var body: some View {
         Group {
             List {
@@ -40,7 +38,7 @@ struct MyDutyView: View {
                 await appState.loadCentrum()
             }
         }
-        .navigationDestination(item: $selectedRoute) { route in
+        .navigationDestination(for: DutyRoute.self) { route in
             switch route {
             case .unit(let id):
                 UnitDetailView(unitID: id)
@@ -89,9 +87,7 @@ struct MyDutyView: View {
     }
 
     private func unitCard(_ unit: Resources_Centrum_Units_Unit) -> some View {
-        Button {
-            selectedRoute = .unit(unit.id)
-        } label: {
+        NavigationLink(value: DutyRoute.unit(unit.id)) {
             HStack(spacing: Theme.Spacing.lg) {
                 ZStack {
                     Circle()
@@ -114,7 +110,6 @@ struct MyDutyView: View {
                 Text(unit.status.status.label)
                     .font(.caption.bold())
                     .foregroundStyle(unit.status.status.color)
-                CardChevron()
             }
             .padding(Theme.Spacing.xl)
             .background(
@@ -132,15 +127,15 @@ struct MyDutyView: View {
             Text("Einheiten-Status setzen")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-            HStack(spacing: Theme.Spacing.sm) {
+            VStack(spacing: Theme.Spacing.sm) {
                 ForEach(Self.unitStatusOptions, id: \.self) { status in
                     let isActive = unit.status.status == status
                     Button {
                         Task { await setUnitStatus(status) }
                     } label: {
-                        Text(status.label)
+                        Label(status.label, systemImage: status.icon)
                             .font(.caption.bold())
-                            .foregroundStyle(isActive ? .white : status.color)
+                            .foregroundStyle(isActive ? status.color.readableText : status.color)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, Theme.Spacing.sm)
                             .background(
@@ -216,9 +211,7 @@ struct MyDutyView: View {
 
     private func dispatchRow(_ dispatch: Resources_Centrum_Dispatches_Dispatch) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            Button {
-                selectedRoute = .dispatch(dispatch.id)
-            } label: {
+            NavigationLink(value: DutyRoute.dispatch(dispatch.id)) {
                 HStack(spacing: Theme.Spacing.lg) {
                     RoundedRectangle(cornerRadius: 2.5)
                         .fill(dispatch.status.status.color)
@@ -242,12 +235,11 @@ struct MyDutyView: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    CardChevron()
                 }
             }
             .buttonStyle(.plain)
 
-            HStack(spacing: Theme.Spacing.sm) {
+            VStack(spacing: Theme.Spacing.sm) {
                 ForEach(Self.dispatchStatusOptions) { option in
                     let isActive = dispatch.status.status == option.status
                     Button {
@@ -255,7 +247,7 @@ struct MyDutyView: View {
                     } label: {
                         Label(option.title, systemImage: option.icon)
                             .font(.caption.bold())
-                            .foregroundStyle(isActive ? .white : option.tint)
+                            .foregroundStyle(isActive ? option.tint.readableText : option.tint)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, Theme.Spacing.sm)
                             .background(
@@ -264,6 +256,7 @@ struct MyDutyView: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .blinking(enabled: isActive && option.status == .needAssistance)
                 }
             }
         }

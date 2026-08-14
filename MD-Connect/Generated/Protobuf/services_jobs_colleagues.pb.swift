@@ -15,8 +15,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
-
 
 // DO NOT EDIT.
 // swift-format-ignore-file
@@ -66,7 +64,14 @@ nonisolated struct Services_Jobs_ListColleaguesRequest: Sendable {
   /// Search params
   var search: String = String()
 
-  var userIds: [Int32] = []
+  var users: Resources_Jobs_UserSelector {
+    get {_users ?? Resources_Jobs_UserSelector()}
+    set {_users = newValue}
+  }
+  /// Returns true if `users` has been explicitly set.
+  var hasUsers: Bool {self._users != nil}
+  /// Clears the value of `users`. Subsequent reads from it will return its default value.
+  mutating func clearUsers() {self._users = nil}
 
   var userOnly: Bool {
     get {_userOnly ?? false}
@@ -112,6 +117,7 @@ nonisolated struct Services_Jobs_ListColleaguesRequest: Sendable {
 
   fileprivate var _pagination: Resources_Common_Database_PaginationRequest? = nil
   fileprivate var _sort: Resources_Common_Database_Sort? = nil
+  fileprivate var _users: Resources_Jobs_UserSelector? = nil
   fileprivate var _userOnly: Bool? = nil
   fileprivate var _absent: Bool? = nil
   fileprivate var _namePrefix: String? = nil
@@ -240,7 +246,14 @@ nonisolated struct Services_Jobs_ListColleagueActivityRequest: Sendable {
   mutating func clearSort() {self._sort = nil}
 
   /// Search params
-  var userIds: [Int32] = []
+  var users: Resources_Jobs_UserSelector {
+    get {_users ?? Resources_Jobs_UserSelector()}
+    set {_users = newValue}
+  }
+  /// Returns true if `users` has been explicitly set.
+  var hasUsers: Bool {self._users != nil}
+  /// Clears the value of `users`. Subsequent reads from it will return its default value.
+  mutating func clearUsers() {self._users = nil}
 
   var activityTypes: [Resources_Jobs_Colleagues_Activity_ColleagueActivityType] = []
 
@@ -250,6 +263,7 @@ nonisolated struct Services_Jobs_ListColleagueActivityRequest: Sendable {
 
   fileprivate var _pagination: Resources_Common_Database_PaginationRequest? = nil
   fileprivate var _sort: Resources_Common_Database_Sort? = nil
+  fileprivate var _users: Resources_Jobs_UserSelector? = nil
 }
 
 nonisolated struct Services_Jobs_ListColleagueActivityResponse: Sendable {
@@ -352,24 +366,86 @@ nonisolated struct Services_Jobs_GetColleagueLabelsResponse: Sendable {
   init() {}
 }
 
-nonisolated struct Services_Jobs_ManageLabelsRequest: Sendable {
+nonisolated struct Services_Jobs_CreateOrUpdateLabelRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var labels: [Resources_Jobs_Labels_Label] = []
+  var label: Resources_Jobs_Labels_Label {
+    get {_label ?? Resources_Jobs_Labels_Label()}
+    set {_label = newValue}
+  }
+  /// Returns true if `label` has been explicitly set.
+  var hasLabel: Bool {self._label != nil}
+  /// Clears the value of `label`. Subsequent reads from it will return its default value.
+  mutating func clearLabel() {self._label = nil}
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _label: Resources_Jobs_Labels_Label? = nil
+}
+
+nonisolated struct Services_Jobs_CreateOrUpdateLabelResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var label: Resources_Jobs_Labels_Label {
+    get {_label ?? Resources_Jobs_Labels_Label()}
+    set {_label = newValue}
+  }
+  /// Returns true if `label` has been explicitly set.
+  var hasLabel: Bool {self._label != nil}
+  /// Clears the value of `label`. Subsequent reads from it will return its default value.
+  mutating func clearLabel() {self._label = nil}
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _label: Resources_Jobs_Labels_Label? = nil
+}
+
+nonisolated struct Services_Jobs_DeleteLabelRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var id: Int64 = 0
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 }
 
-nonisolated struct Services_Jobs_ManageLabelsResponse: Sendable {
+nonisolated struct Services_Jobs_DeleteLabelResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var labels: [Resources_Jobs_Labels_Label] = []
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct Services_Jobs_ReorderLabelsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var labelIds: [Int64] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct Services_Jobs_ReorderLabelsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -406,7 +482,7 @@ fileprivate nonisolated let _protobuf_package = "services.jobs"
 
 nonisolated extension Services_Jobs_ListColleaguesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".ListColleaguesRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pagination\0\u{1}sort\0\u{1}search\0\u{3}user_ids\0\u{3}user_only\0\u{1}absent\0\u{3}label_ids\0\u{3}name_prefix\0\u{3}name_suffix\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pagination\0\u{1}sort\0\u{1}search\0\u{1}users\0\u{3}user_only\0\u{1}absent\0\u{3}label_ids\0\u{3}name_prefix\0\u{3}name_suffix\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -417,7 +493,7 @@ nonisolated extension Services_Jobs_ListColleaguesRequest: SwiftProtobuf.Message
       case 1: try { try decoder.decodeSingularMessageField(value: &self._pagination) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._sort) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.search) }()
-      case 4: try { try decoder.decodeRepeatedInt32Field(value: &self.userIds) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._users) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self._userOnly) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self._absent) }()
       case 7: try { try decoder.decodeRepeatedInt64Field(value: &self.labelIds) }()
@@ -442,9 +518,9 @@ nonisolated extension Services_Jobs_ListColleaguesRequest: SwiftProtobuf.Message
     if !self.search.isEmpty {
       try visitor.visitSingularStringField(value: self.search, fieldNumber: 3)
     }
-    if !self.userIds.isEmpty {
-      try visitor.visitPackedInt32Field(value: self.userIds, fieldNumber: 4)
-    }
+    try { if let v = self._users {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try { if let v = self._userOnly {
       try visitor.visitSingularBoolField(value: v, fieldNumber: 5)
     } }()
@@ -467,7 +543,7 @@ nonisolated extension Services_Jobs_ListColleaguesRequest: SwiftProtobuf.Message
     if lhs._pagination != rhs._pagination {return false}
     if lhs._sort != rhs._sort {return false}
     if lhs.search != rhs.search {return false}
-    if lhs.userIds != rhs.userIds {return false}
+    if lhs._users != rhs._users {return false}
     if lhs._userOnly != rhs._userOnly {return false}
     if lhs._absent != rhs._absent {return false}
     if lhs.labelIds != rhs.labelIds {return false}
@@ -645,7 +721,7 @@ nonisolated extension Services_Jobs_GetColleagueResponse: SwiftProtobuf.Message,
 
 nonisolated extension Services_Jobs_ListColleagueActivityRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".ListColleagueActivityRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pagination\0\u{1}sort\0\u{3}user_ids\0\u{3}activity_types\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pagination\0\u{1}sort\0\u{1}users\0\u{3}activity_types\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -655,7 +731,7 @@ nonisolated extension Services_Jobs_ListColleagueActivityRequest: SwiftProtobuf.
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._pagination) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._sort) }()
-      case 3: try { try decoder.decodeRepeatedInt32Field(value: &self.userIds) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._users) }()
       case 4: try { try decoder.decodeRepeatedEnumField(value: &self.activityTypes) }()
       default: break
       }
@@ -673,9 +749,9 @@ nonisolated extension Services_Jobs_ListColleagueActivityRequest: SwiftProtobuf.
     try { if let v = self._sort {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
-    if !self.userIds.isEmpty {
-      try visitor.visitPackedInt32Field(value: self.userIds, fieldNumber: 3)
-    }
+    try { if let v = self._users {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
     if !self.activityTypes.isEmpty {
       try visitor.visitPackedEnumField(value: self.activityTypes, fieldNumber: 4)
     }
@@ -685,7 +761,7 @@ nonisolated extension Services_Jobs_ListColleagueActivityRequest: SwiftProtobuf.
   static func ==(lhs: Services_Jobs_ListColleagueActivityRequest, rhs: Services_Jobs_ListColleagueActivityRequest) -> Bool {
     if lhs._pagination != rhs._pagination {return false}
     if lhs._sort != rhs._sort {return false}
-    if lhs.userIds != rhs.userIds {return false}
+    if lhs._users != rhs._users {return false}
     if lhs.activityTypes != rhs.activityTypes {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -868,9 +944,9 @@ nonisolated extension Services_Jobs_GetColleagueLabelsResponse: SwiftProtobuf.Me
   }
 }
 
-nonisolated extension Services_Jobs_ManageLabelsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ManageLabelsRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}labels\0")
+nonisolated extension Services_Jobs_CreateOrUpdateLabelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".CreateOrUpdateLabelRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}label\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -878,29 +954,33 @@ nonisolated extension Services_Jobs_ManageLabelsRequest: SwiftProtobuf.Message, 
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.labels) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._label) }()
       default: break
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.labels.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.labels, fieldNumber: 1)
-    }
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._label {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Services_Jobs_ManageLabelsRequest, rhs: Services_Jobs_ManageLabelsRequest) -> Bool {
-    if lhs.labels != rhs.labels {return false}
+  static func ==(lhs: Services_Jobs_CreateOrUpdateLabelRequest, rhs: Services_Jobs_CreateOrUpdateLabelRequest) -> Bool {
+    if lhs._label != rhs._label {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-nonisolated extension Services_Jobs_ManageLabelsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".ManageLabelsResponse"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}labels\0")
+nonisolated extension Services_Jobs_CreateOrUpdateLabelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".CreateOrUpdateLabelResponse"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}label\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -908,21 +988,123 @@ nonisolated extension Services_Jobs_ManageLabelsResponse: SwiftProtobuf.Message,
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.labels) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._label) }()
       default: break
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.labels.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.labels, fieldNumber: 1)
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._label {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Services_Jobs_CreateOrUpdateLabelResponse, rhs: Services_Jobs_CreateOrUpdateLabelResponse) -> Bool {
+    if lhs._label != rhs._label {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Services_Jobs_DeleteLabelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".DeleteLabelRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt64Field(value: &self.id) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.id != 0 {
+      try visitor.visitSingularInt64Field(value: self.id, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  static func ==(lhs: Services_Jobs_ManageLabelsResponse, rhs: Services_Jobs_ManageLabelsResponse) -> Bool {
-    if lhs.labels != rhs.labels {return false}
+  static func ==(lhs: Services_Jobs_DeleteLabelRequest, rhs: Services_Jobs_DeleteLabelRequest) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Services_Jobs_DeleteLabelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".DeleteLabelResponse"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Services_Jobs_DeleteLabelResponse, rhs: Services_Jobs_DeleteLabelResponse) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Services_Jobs_ReorderLabelsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".ReorderLabelsRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}label_ids\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedInt64Field(value: &self.labelIds) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.labelIds.isEmpty {
+      try visitor.visitPackedInt64Field(value: self.labelIds, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Services_Jobs_ReorderLabelsRequest, rhs: Services_Jobs_ReorderLabelsRequest) -> Bool {
+    if lhs.labelIds != rhs.labelIds {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Services_Jobs_ReorderLabelsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".ReorderLabelsResponse"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Services_Jobs_ReorderLabelsResponse, rhs: Services_Jobs_ReorderLabelsResponse) -> Bool {
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

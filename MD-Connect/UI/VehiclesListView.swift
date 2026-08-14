@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftProtobuf
 
 /// Vehicles module: searchable list of vehicles with page-based pagination.
 /// Searching (license plate, model or owner name) reloads live as the text
@@ -133,14 +134,15 @@ struct VehiclesListView: View {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let offset = target * Self.pageSize
         do {
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
             let userIds = try await resolveOwnerIDs(query)
             let response = try await appState.listVehicles(
                 licensePlate: query,
                 model: query.count >= 6 ? query : "",
                 userIds: userIds,
-                offset: target * Self.pageSize,
+                offset: offset,
                 pageSize: Self.pageSize
             )
             vehicles = response.vehicles

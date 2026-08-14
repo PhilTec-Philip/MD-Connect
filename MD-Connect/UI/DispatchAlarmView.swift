@@ -3,6 +3,8 @@ import SwiftUI
 /// Fullscreen red alarm shown when the character's own unit is assigned to a
 /// dispatch. Shows the dispatch location (with a mini map), sender and status,
 /// plus large "Annehmen" / "Ablehnen" buttons.
+///
+/// Renders a yellow "Verstärkung" variant for `needAssistance` alarms.
 struct DispatchAlarmView: View {
     @Environment(AppState.self) private var appState
 
@@ -10,14 +12,25 @@ struct DispatchAlarmView: View {
 
     @State private var isHandling = false
 
+    private var isReinforcement: Bool {
+        alarm.kind == .reinforcement
+    }
+
     private var dispatch: Resources_Centrum_Dispatches_Dispatch {
         alarm.dispatch
+    }
+
+    private var gradientColors: [Color] {
+        if isReinforcement {
+            return [Color(red: 0.72, green: 0.52, blue: 0.03), Color(red: 0.88, green: 0.62, blue: 0.08).opacity(0.8)]
+        }
+        return [Color(red: 0.62, green: 0.05, blue: 0.05), Theme.Palette.danger.opacity(0.75)]
     }
 
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(red: 0.62, green: 0.05, blue: 0.05), Theme.Palette.danger.opacity(0.75)],
+                colors: gradientColors,
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -37,17 +50,19 @@ struct DispatchAlarmView: View {
             VStack {
                 HStack {
                     Spacer()
-                    Button {
-                        appState.dismissAlarm()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.headline.weight(.bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
-                            .background(.white.opacity(0.2), in: Circle())
+                    if !isReinforcement {
+                        Button {
+                            appState.dismissAlarm()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 40, height: 40)
+                                .background(.white.opacity(0.2), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Alarm schließen")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Alarm schließen")
                 }
                 .padding(.horizontal, Theme.Spacing.xl)
                 .padding(.top, Theme.Spacing.sm)
@@ -60,10 +75,10 @@ struct DispatchAlarmView: View {
 
     private var header: some View {
         VStack(spacing: Theme.Spacing.md) {
-            Image(systemName: "exclamationmark.triangle.fill")
+            Image(systemName: isReinforcement ? "exclamationmark.bubble.fill" : "exclamationmark.triangle.fill")
                 .font(.system(size: 36))
                 .symbolEffect(.bounce, value: alarm.id)
-            Text("NEUER EINSATZ")
+            Text(isReinforcement ? "VERSTÄRKUNG ANFORDERN" : "NEUER EINSATZ")
                 .font(Theme.Typography.title2)
                 .tracking(2)
             Text(formatDispatchID(dispatch.id))
@@ -71,6 +86,11 @@ struct DispatchAlarmView: View {
                 .padding(.horizontal, Theme.Spacing.xl)
                 .padding(.vertical, Theme.Spacing.sm)
                 .background(.white.opacity(0.2), in: Capsule())
+            if isReinforcement {
+                Text("Eine Einheit vor Ort braucht Unterstützung.")
+                    .font(.body.weight(.medium))
+                    .multilineTextAlignment(.center)
+            }
             if let message = dispatchMessageText(dispatch) {
                 Text(message)
                     .font(.body.weight(.medium))
@@ -109,10 +129,10 @@ struct DispatchAlarmView: View {
 
     private var senderCard: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            Label("Gesendet von", systemImage: "person.crop.circle")
+            Label(isReinforcement ? "Hilferufendes Kollegium" : "Gesendet von", systemImage: "person.2.fill")
                 .font(.subheadline.bold())
             HStack(spacing: Theme.Spacing.lg) {
-                Image(systemName: dispatch.anon ? "eye.slash.fill" : "person.fill")
+                Image(systemName: isReinforcement ? "exclamationmark.bubble.fill" : (dispatch.anon ? "person.crop.circle.badge.questionmark" : "person.fill"))
                     .font(.title3)
                     .frame(width: 36, height: 36)
                     .background(.white.opacity(0.2), in: Circle())
@@ -132,7 +152,18 @@ struct DispatchAlarmView: View {
     }
 
     private var actionButtons: some View {
-        HStack(spacing: Theme.Spacing.xl) {
+        if isReinforcement {
+            return AnyView(Button {
+                appState.dismissAlarm()
+            } label: {
+                actionLabel(
+                    title: "Schließen",
+                    systemImage: "xmark"
+                )
+            }
+            .buttonStyle(.plain))
+        }
+        return AnyView(HStack(spacing: Theme.Spacing.xl) {
             Button {
                 handle(.accepted)
             } label: {
@@ -154,7 +185,7 @@ struct DispatchAlarmView: View {
             }
             .buttonStyle(.plain)
             .disabled(isHandling)
-        }
+        })
     }
 
     private func actionLabel(title: String, systemImage: String) -> some View {
@@ -172,11 +203,26 @@ struct DispatchAlarmView: View {
     }
 
     private var senderText: String {
+        if isReinforcement {
+            if let requester = alarm.requester {
+                return colleagueName(requester)
+            }
+            return dispatch.anon ? "Anonym" : creatorName
+        }
         if dispatch.anon {
             return "Anonym"
         }
+        return creatorName
+    }
+
+    private var creatorName: String {
         let user = dispatch.creator
         let name = [user.firstname, user.lastname].filter { !$0.isEmpty }.joined(separator: " ")
+        return name.isEmpty ? "Unbekannt" : name
+    }
+
+    private func colleagueName(_ colleague: Resources_Jobs_Colleagues_Colleague) -> String {
+        let name = [colleague.firstname, colleague.lastname].filter { !$0.isEmpty }.joined(separator: " ")
         return name.isEmpty ? "Unbekannt" : name
     }
 

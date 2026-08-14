@@ -15,8 +15,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
-
 
 // DO NOT EDIT.
 // swift-format-ignore-file
@@ -79,7 +77,14 @@ nonisolated struct Services_Jobs_ListTimeclockRequest: Sendable {
 
   var perDay: Bool = false
 
-  var userIds: [Int32] = []
+  var users: Resources_Jobs_UserSelector {
+    get {_users ?? Resources_Jobs_UserSelector()}
+    set {_users = newValue}
+  }
+  /// Returns true if `users` has been explicitly set.
+  var hasUsers: Bool {self._users != nil}
+  /// Clears the value of `users`. Subsequent reads from it will return its default value.
+  mutating func clearUsers() {self._users = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -88,6 +93,7 @@ nonisolated struct Services_Jobs_ListTimeclockRequest: Sendable {
   fileprivate var _pagination: Resources_Common_Database_PaginationRequest? = nil
   fileprivate var _sort: Resources_Common_Database_Sort? = nil
   fileprivate var _date: Resources_Common_Database_DateRange? = nil
+  fileprivate var _users: Resources_Jobs_UserSelector? = nil
 }
 
 nonisolated struct Services_Jobs_ListTimeclockResponse: Sendable {
@@ -236,20 +242,20 @@ nonisolated struct Services_Jobs_GetTimeclockStatsRequest: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var userID: Int32 {
-    get {_userID ?? 0}
-    set {_userID = newValue}
+  var users: Resources_Jobs_UserSelector {
+    get {_users ?? Resources_Jobs_UserSelector()}
+    set {_users = newValue}
   }
-  /// Returns true if `userID` has been explicitly set.
-  var hasUserID: Bool {self._userID != nil}
-  /// Clears the value of `userID`. Subsequent reads from it will return its default value.
-  mutating func clearUserID() {self._userID = nil}
+  /// Returns true if `users` has been explicitly set.
+  var hasUsers: Bool {self._users != nil}
+  /// Clears the value of `users`. Subsequent reads from it will return its default value.
+  mutating func clearUsers() {self._users = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
-  fileprivate var _userID: Int32? = nil
+  fileprivate var _users: Resources_Jobs_UserSelector? = nil
 }
 
 nonisolated struct Services_Jobs_GetTimeclockStatsResponse: Sendable {
@@ -301,12 +307,22 @@ nonisolated struct Services_Jobs_ListInactiveEmployeesRequest: Sendable {
   /// Search params
   var days: Int32 = 0
 
+  var users: Resources_Jobs_UserSelector {
+    get {_users ?? Resources_Jobs_UserSelector()}
+    set {_users = newValue}
+  }
+  /// Returns true if `users` has been explicitly set.
+  var hasUsers: Bool {self._users != nil}
+  /// Clears the value of `users`. Subsequent reads from it will return its default value.
+  mutating func clearUsers() {self._users = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
   fileprivate var _pagination: Resources_Common_Database_PaginationRequest? = nil
   fileprivate var _sort: Resources_Common_Database_Sort? = nil
+  fileprivate var _users: Resources_Jobs_UserSelector? = nil
 }
 
 nonisolated struct Services_Jobs_ListInactiveEmployeesResponse: Sendable {
@@ -338,7 +354,7 @@ fileprivate nonisolated let _protobuf_package = "services.jobs"
 
 nonisolated extension Services_Jobs_ListTimeclockRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".ListTimeclockRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pagination\0\u{1}sort\0\u{3}user_mode\0\u{1}mode\0\u{1}date\0\u{3}per_day\0\u{3}user_ids\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pagination\0\u{1}sort\0\u{3}user_mode\0\u{1}mode\0\u{1}date\0\u{3}per_day\0\u{1}users\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -352,7 +368,7 @@ nonisolated extension Services_Jobs_ListTimeclockRequest: SwiftProtobuf.Message,
       case 4: try { try decoder.decodeSingularEnumField(value: &self.mode) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._date) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.perDay) }()
-      case 7: try { try decoder.decodeRepeatedInt32Field(value: &self.userIds) }()
+      case 7: try { try decoder.decodeSingularMessageField(value: &self._users) }()
       default: break
       }
     }
@@ -381,9 +397,9 @@ nonisolated extension Services_Jobs_ListTimeclockRequest: SwiftProtobuf.Message,
     if self.perDay != false {
       try visitor.visitSingularBoolField(value: self.perDay, fieldNumber: 6)
     }
-    if !self.userIds.isEmpty {
-      try visitor.visitPackedInt32Field(value: self.userIds, fieldNumber: 7)
-    }
+    try { if let v = self._users {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -394,7 +410,7 @@ nonisolated extension Services_Jobs_ListTimeclockRequest: SwiftProtobuf.Message,
     if lhs.mode != rhs.mode {return false}
     if lhs._date != rhs._date {return false}
     if lhs.perDay != rhs.perDay {return false}
-    if lhs.userIds != rhs.userIds {return false}
+    if lhs._users != rhs._users {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -633,7 +649,7 @@ nonisolated extension Services_Jobs_TimeclockRange: SwiftProtobuf.Message, Swift
 
 nonisolated extension Services_Jobs_GetTimeclockStatsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".GetTimeclockStatsRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}users\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -641,7 +657,7 @@ nonisolated extension Services_Jobs_GetTimeclockStatsRequest: SwiftProtobuf.Mess
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularInt32Field(value: &self._userID) }()
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._users) }()
       default: break
       }
     }
@@ -652,14 +668,14 @@ nonisolated extension Services_Jobs_GetTimeclockStatsRequest: SwiftProtobuf.Mess
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
     // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._userID {
-      try visitor.visitSingularInt32Field(value: v, fieldNumber: 1)
+    try { if let v = self._users {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: Services_Jobs_GetTimeclockStatsRequest, rhs: Services_Jobs_GetTimeclockStatsRequest) -> Bool {
-    if lhs._userID != rhs._userID {return false}
+    if lhs._users != rhs._users {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -706,7 +722,7 @@ nonisolated extension Services_Jobs_GetTimeclockStatsResponse: SwiftProtobuf.Mes
 
 nonisolated extension Services_Jobs_ListInactiveEmployeesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".ListInactiveEmployeesRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pagination\0\u{1}sort\0\u{1}days\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pagination\0\u{1}sort\0\u{1}days\0\u{1}users\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -717,6 +733,7 @@ nonisolated extension Services_Jobs_ListInactiveEmployeesRequest: SwiftProtobuf.
       case 1: try { try decoder.decodeSingularMessageField(value: &self._pagination) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._sort) }()
       case 3: try { try decoder.decodeSingularInt32Field(value: &self.days) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._users) }()
       default: break
       }
     }
@@ -736,6 +753,9 @@ nonisolated extension Services_Jobs_ListInactiveEmployeesRequest: SwiftProtobuf.
     if self.days != 0 {
       try visitor.visitSingularInt32Field(value: self.days, fieldNumber: 3)
     }
+    try { if let v = self._users {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -743,6 +763,7 @@ nonisolated extension Services_Jobs_ListInactiveEmployeesRequest: SwiftProtobuf.
     if lhs._pagination != rhs._pagination {return false}
     if lhs._sort != rhs._sort {return false}
     if lhs.days != rhs.days {return false}
+    if lhs._users != rhs._users {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

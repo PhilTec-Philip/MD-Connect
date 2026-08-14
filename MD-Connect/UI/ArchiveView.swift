@@ -18,7 +18,6 @@ struct ArchiveView: View {
     @State private var currentPage: Int64 = 0
     @State private var totalCount: Int64 = 0
     @State private var hasLoaded = false
-    @State private var selectedDispatchID: Int64?
 
     private var totalPages: Int64 {
         max(1, Int64(ceil(Double(totalCount) / Double(Self.pageSize))))
@@ -79,9 +78,7 @@ struct ArchiveView: View {
                 } else {
                     Section("\(totalCount) Einsätze gefunden") {
                         ForEach(dispatches) { dispatch in
-                            Button {
-                                selectedDispatchID = dispatch.id
-                            } label: {
+                            NavigationLink(value: CentrumRoute.dispatch(dispatch.id)) {
                                 ArchiveDispatchRow(dispatch: dispatch)
                             }
                             .buttonStyle(.plain)
@@ -124,6 +121,7 @@ struct ArchiveView: View {
                 }
             }
             .cardListStyle()
+            .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
             .onChange(of: searchText) {
                 Task { await load(reset: true) }
             }
@@ -135,9 +133,6 @@ struct ArchiveView: View {
                 hasLoaded = true
                 await load(reset: true)
             }
-        }
-        .navigationDestination(item: $selectedDispatchID) { id in
-            DispatchDetailView(dispatchID: id)
         }
     }
 
@@ -206,7 +201,6 @@ private struct ArchiveDispatchRow: View {
             .padding(.leading, Theme.Spacing.xl)
 
             Spacer(minLength: 0)
-            CardChevron()
         }
         .padding(Theme.Spacing.md)
         .padding(.trailing, Theme.Spacing.sm)

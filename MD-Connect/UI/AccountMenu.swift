@@ -13,6 +13,7 @@ enum AppViewMode: String {
 struct AccountMenu: View {
     @Environment(AppState.self) private var appState
     @AppStorage("appViewMode") private var viewMode: AppViewMode = .overview
+    @State private var showClearCacheConfirm = false
 
     var body: some View {
         Menu {
@@ -32,9 +33,15 @@ struct AccountMenu: View {
                 viewMode = (viewMode == .overview) ? .quick : .overview
             } label: {
                 Label(
-                    "Ansicht wechseln",
+                    viewMode == .overview ? "Schnellansicht" : "Normale Ansicht",
                     systemImage: viewMode == .overview ? "bolt.fill" : "square.grid.2x2.fill"
                 )
+            }
+
+            Button(role: .destructive) {
+                showClearCacheConfirm = true
+            } label: {
+                Label("Cache löschen", systemImage: "trash")
             }
 
             Button(role: .destructive) {
@@ -45,6 +52,18 @@ struct AccountMenu: View {
         } label: {
             Image(systemName: "ellipsis.circle")
                 .font(.title3)
+        }
+        .confirmationDialog(
+            "Cache löschen?",
+            isPresented: $showClearCacheConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Cache löschen", role: .destructive) {
+                ViewedContentCache.shared.clear()
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text("Gesehene Wiki- und Dokument-Inhalte werden aus dem Cache entfernt.")
         }
     }
 }
@@ -59,10 +78,14 @@ struct ConnectionLabel: View {
             Circle()
                 .fill(appState.isChannelConnected ? Theme.Palette.success : Theme.Palette.warning)
                 .frame(width: 9, height: 9)
-            Text(appState.isChannelConnected ? "Verbunden" : "Verbindung …")
+            Text(statusText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var statusText: String {
+        appState.isChannelConnected ? "Verbunden" : "Verbindung …"
     }
 }
 

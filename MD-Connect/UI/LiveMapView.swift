@@ -7,6 +7,16 @@ import SwiftUI
 /// The map renders the same San Andreas tiles as the FiveNet web app
 /// (`/images/livemap/tiles/{postal|satellite}/{z}/{x}/{y}.webp`) using the
 /// custom CRS from `app/composables/livemap/useMapProjection.ts`.
+///
+/// Dedicated route type so the marker links resolve against a destination
+/// registered on this module root only. Sharing `CentrumRoute` with the
+/// `CentrumView` module root registered two `navigationDestination`s for the
+/// same type in one stack (white screen / double push).
+enum LiveMapRoute: Hashable {
+    case unit(Int64)
+    case dispatch(Int64)
+}
+
 struct LiveMapView: View {
     @Environment(AppState.self) private var appState
 
@@ -41,11 +51,14 @@ struct LiveMapView: View {
     @AppStorage("livemapMapZoom") private var mapZoom = MapProjection.minZoom
     @State private var startZoom = MapProjection.minZoom
     @State private var mapCenter = CGPoint(x: 2000, y: 2000)
+    @State private var hasLoadedInitialCenter = false
     @State private var dragStart: (center: CGPoint, zoom: Int)?
     @AppStorage("livemapShowGrid") private var showGrid = false
     @AppStorage("livemapShowMarkerMarkers") private var showMarkerMarkers = true
     @AppStorage("livemapShowMarkerLabels") private var showMarkerLabels = true
     @State private var selectedMarker: Resources_Livemap_Markers_MarkerMarker?
+    @AppStorage("livemapShowHeatmap") private var showHeatmap = false
+    @State private var heatmapEntries: [Resources_Livemap_Heatmap_HeatmapEntry] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -73,27 +86,46 @@ struct LiveMapView: View {
         .pendingAlarmBell()
         .moduleNavTitle(.livemap, title: viewMode == .duty ? "Meine Einheit" : nil)
         .navConnectionDot()
-        .navigationDestination(for: Int64.self) { id in
-            DispatchDetailView(dispatchID: id)
-        }
-        .navigationDestination(for: CentrumRoute.self) { route in
+        .navigationDestination(for: LiveMapRoute.self) { route in
             switch route {
-            case .dispatch(let id):
-                DispatchDetailView(dispatchID: id)
             case .unit(let id):
                 UnitDetailView(unitID: id)
+            case .dispatch(let id):
+                DispatchDetailView(dispatchID: id)
             }
         }
         .sheet(item: $selectedMarker) { marker in
             MarkerMarkerDetailSheet(marker: marker)
         }
         .task {
+            await loadInitialCenterIfNeeded()
             await appState.startCentrumStream()
             await appState.startLivemapStream()
+            if showHeatmap {
+                await loadHeatmap()
+            }
+            var centrumTicks = 0
             while !Task.isCancelled {
                 await appState.loadCentrum()
+                // Low-frequency heatmap refresh: every 60 cycles (= 30 min)
+                // plus the manual triggers (toggle on / initial load).
+                centrumTicks += 1
+                if showHeatmap && centrumTicks >= 60 {
+                    centrumTicks = 0
+                    await loadHeatmap()
+                }
                 try? await Task.sleep(for: .seconds(30))
             }
+        }
+        .onChange(of: showHeatmap) { _, isOn in
+            if isOn {
+                Task { await loadHeatmap() }
+            } else {
+                heatmapEntries = []
+            }
+        }
+        .onDisappear {
+            heatmapEntries = []
         }
         .alert("Livemap-Fehler", isPresented: Binding(
             get: { appState.livemapError != nil },
@@ -141,6 +173,10 @@ struct LiveMapView: View {
                     gridLayer(in: proxy.size, viewportOrigin: viewportOrigin)
                 }
 
+                if showHeatmap {
+                    heatmapLayer(in: proxy.size, viewportOrigin: viewportOrigin)
+                }
+
                 if showMarkerMarkers {
                     markerMarkersLayer(in: proxy.size, viewportOrigin: viewportOrigin)
                 }
@@ -163,6 +199,7 @@ struct LiveMapView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .padding()
             }
+            .animation(.easeOut(duration: 0.2), value: mapZoom)
             .clipped()
             .contentShape(Rectangle())
             .gesture(dragGesture)
@@ -183,6 +220,7 @@ struct LiveMapView: View {
             Toggle("Markerbezeichnungen anzeigen", isOn: $showMarkerLabels)
                 .disabled(!showMarkerMarkers)
             Toggle("Raster anzeigen", isOn: $showGrid)
+            Toggle("Einsatz-Heatmap", isOn: $showHeatmap)
 
             Button {
                 resetMap()
@@ -274,6 +312,16 @@ struct LiveMapView: View {
             x: min(max(point.x, -4000), 8000),
             y: min(max(point.y, -4000), 8000)
         )
+    }
+
+    /// Centers the map on Los Santos (postal 7135) once, so the initial view
+    /// is not the bare tile origin (2000/2000).
+    private func loadInitialCenterIfNeeded() async {
+        guard !hasLoadedInitialCenter else { return }
+        hasLoadedInitialCenter = true
+        guard let baseURL = appState.client?.baseURL,
+              let postal = await PostalLoader.shared.location(for: "7135", baseURL: baseURL) else { return }
+        mapCenter = clampCenter(CGPoint(x: postal.x, y: postal.y))
     }
 
     // MARK: - Map overlays
@@ -547,6 +595,49 @@ struct LiveMapView: View {
         }
     }
 
+    // MARK: Heatmap
+
+    /// Renders the dispatch heatmap as overlapping radial-gradient hotspots.
+    /// Each entry is a weighted point (x/y in game space, w = intensity); the
+    /// hotspot radius and opacity are normalized against the strongest entry.
+    private func heatmapLayer(in size: CGSize, viewportOrigin: CGPoint) -> some View {
+        let maxWeight = heatmapEntries.map(\.w).max() ?? 1
+        return ZStack {
+            ForEach(heatmapEntries.indices, id: \.self) { index in
+                let entry = heatmapEntries[index]
+                let point = toView(CGPoint(x: entry.x, y: entry.y), viewportOrigin: viewportOrigin)
+                let intensity = maxWeight > 0 ? min(max(Double(entry.w) / Double(maxWeight), 0), 1) : 0
+                let radius = 12 + 40 * intensity
+                let opacity = 0.18 + 0.4 * intensity
+                Circle()
+                    .fill(RadialGradient(
+                        colors: [
+                            Color.orange.opacity(opacity),
+                            Color.red.opacity(opacity * 0.6),
+                            .clear,
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: radius
+                    ))
+                    .frame(width: radius * 2, height: radius * 2)
+                    .position(x: point.x, y: point.y)
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .allowsHitTesting(false)
+    }
+
+    private func loadHeatmap() async {
+        guard let client = appState.client else { return }
+        do {
+            let response = try await client.getDispatchHeatmap()
+            heatmapEntries = response.entries
+        } catch {
+            heatmapEntries = []
+        }
+    }
+
     // MARK: Markers (user / dispatch)
 
     @ViewBuilder
@@ -573,7 +664,7 @@ struct LiveMapView: View {
 
         if marker.hasUnit {
             // Tapping a colleague that is part of a unit opens the unit info.
-            NavigationLink(value: CentrumRoute.unit(marker.unit.id)) {
+            NavigationLink(value: LiveMapRoute.unit(marker.unit.id)) {
                 label
             }
             .buttonStyle(.plain)
@@ -599,11 +690,14 @@ struct LiveMapView: View {
     }
 
     private func dispatchMarkerView(_ dispatch: Resources_Centrum_Dispatches_Dispatch) -> some View {
-        NavigationLink(value: dispatch.id) {
+        // Dedicated (typed) route instead of a bare Int64 so the marker tap
+        // resolves unambiguously in the enclosing stack (bare Int64 collides
+        // with the Wiki page destination and can double-push a module).
+        NavigationLink(value: LiveMapRoute.dispatch(dispatch.id)) {
             VStack(spacing: 2) {
                 Image(systemName: "bell.fill")
                     .font(.system(size: 15))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(dispatch.status.status.color.readableText)
                     .frame(width: 22, height: 22)
                     .background(dispatch.status.status.color, in: Circle())
                     .shadow(radius: 2)

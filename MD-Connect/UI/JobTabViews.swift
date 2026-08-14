@@ -85,6 +85,7 @@ struct JobActivityFeedView: View {
             }
         }
         .cardListStyle()
+        .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
         .navigationTitle("Aktivität")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -196,14 +197,7 @@ private struct JobActivityRow: View {
     }
 
     private var titleText: String {
-        var text = entry.activityType.title
-        if entry.hasSourceUser {
-            text += " · \(colleagueName(entry.sourceUser))"
-        }
-        if entry.hasTargetUser, entry.targetUserID != entry.sourceUserID {
-            text += " → \(colleagueName(entry.targetUser))"
-        }
-        return text
+        colleagueActivityHeadline(entry, previousGrade: previousGrade)
     }
 }
 
@@ -310,6 +304,20 @@ struct JobTimeclockView: View {
                         DatePicker("Von", selection: $startDate, displayedComponents: .date)
                         Divider()
                         DatePicker("Bis", selection: $endDate, displayedComponents: .date)
+                        Divider()
+                        Button {
+                            let today = Calendar.current.startOfDay(for: Date())
+                            startDate = today
+                            endDate = today
+                            mode = .range
+                            Task { await load() }
+                        } label: {
+                            Label("Heutigen Tag auswerten", systemImage: "calendar.circle")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Theme.Palette.accent)
+                        .padding(.top, Theme.Spacing.md)
                     }
                 }
                 .cardRow()
@@ -364,6 +372,7 @@ struct JobTimeclockView: View {
             }
         }
         .cardListStyle()
+        .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
         .navigationTitle("Stempeluhr")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: mode) { Task { await load() } }
@@ -508,6 +517,8 @@ struct JobConductListView: View {
     @State private var hasLoaded = false
     @State private var showCreateSheet = false
     @State private var selectedEntryID: Int64?
+    @State private var searchText = ""
+    @State private var searchTask: Task<Void, Never>?
 
     private var totalPages: Int64 {
         max(1, Int64(ceil(Double(totalCount) / Double(Self.pageSize))))
@@ -520,6 +531,31 @@ struct JobConductListView: View {
     var body: some View {
         Group {
             List {
+                Section {
+                    SectionCard {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                            HStack(spacing: Theme.Spacing.sm) {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundStyle(.secondary)
+                                TextField("Eintrag oder #ID suchen", text: $searchText)
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                                if !searchText.isEmpty {
+                                    Button {
+                                        searchText = ""
+                                        Task { await load(reset: true) }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                    .cardRow()
+                }
+
                 if let errorMessage {
                     Section {
                         StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -622,6 +658,23 @@ struct JobConductListView: View {
                 }
             }
             .cardListStyle()
+            .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
+            .onChange(of: searchText) {
+                searchTask?.cancel()
+                let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if query.isEmpty {
+                    searchTask = Task { @MainActor in
+                        await load(reset: true)
+                    }
+                    return
+                }
+                let task = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard !Task.isCancelled else { return }
+                    await load(reset: true)
+                }
+                searchTask = task
+            }
             .navigationTitle("Führungsregister")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -792,20 +845,77 @@ struct JobConductListView: View {
             let types: [Resources_Jobs_Conduct_ConductType] =
                 selectedType == .unspecified ? [] : [selectedType]
             let userIds: [Int32] = userID.map { [$0] } ?? []
-            let response = try await appState.listConductEntries(
-                types: types,
-                userIds: userIds,
-                showExpired: showExpired ? true : nil,
-                showDrafts: showDrafts ? true : nil,
-                offset: target * Self.pageSize,
-                pageSize: Self.pageSize
-            )
-            entries = response.entries
-            totalCount = response.pagination.totalCount
+            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let ids: [Int64] = Int64(query).map { [$0] } ?? []
+
+            if !ids.isEmpty {
+                let response = try await appState.listConductEntries(
+                    types: types,
+                    userIds: userIds,
+                    showExpired: showExpired ? true : nil,
+                    showDrafts: showDrafts ? true : nil,
+                    ids: ids,
+                    offset: target * Self.pageSize,
+                    pageSize: Self.pageSize
+                )
+                entries = response.entries
+                totalCount = response.pagination.totalCount
+                return
+            }
+
+            // Empty search: plain paginated listing of all entries (the server
+            // filters nothing here, so pagination and totals stay intact).
+            if query.isEmpty {
+                let response = try await appState.listConductEntries(
+                    types: types,
+                    userIds: userIds,
+                    showExpired: showExpired ? true : nil,
+                    showDrafts: showDrafts ? true : nil,
+                    offset: target * Self.pageSize,
+                    pageSize: Self.pageSize
+                )
+                entries = response.entries
+                totalCount = response.pagination.totalCount
+                return
+            }
+
+            // Text search: the server has no `search` field, so walk the pages
+            // until we have a full page of matches (capped at 400 entries).
+            let queryLower = query.lowercased()
+            var matches: [Resources_Jobs_Conduct_ConductEntry] = []
+            var offset: Int64 = 0
+            var fetched: Int64 = 0
+            while matches.count < Self.pageSize {
+                let response = try await appState.listConductEntries(
+                    types: types,
+                    userIds: userIds,
+                    showExpired: showExpired ? true : nil,
+                    showDrafts: showDrafts ? true : nil,
+                    offset: offset,
+                    pageSize: Self.pageSize
+                )
+                let pageEntries = response.entries
+                if pageEntries.isEmpty { break }
+                matches.append(contentsOf: pageEntries.filter { matchesQuery($0, queryLower) })
+                fetched += Int64(pageEntries.count)
+                offset += Int64(pageEntries.count)
+                if fetched >= 400 { break }
+            }
+            totalCount = Int64(matches.count)
+            let start = min(Int(target * Self.pageSize), matches.count)
+            entries = Array(matches.dropFirst(start).prefix(Int(Self.pageSize)))
         } catch {
             errorMessage = error.localizedDescription
             currentPage = previous
         }
+    }
+
+    private func matchesQuery(_ entry: Resources_Jobs_Conduct_ConductEntry, _ queryLower: String) -> Bool {
+        if "\(entry.id)".contains(queryLower) { return true }
+        if conductMessagePreview(entry).lowercased().contains(queryLower) { return true }
+        if entry.hasTargetUser, colleagueName(entry.targetUser).lowercased().contains(queryLower) { return true }
+        if entry.hasCreator, colleagueName(entry.creator).lowercased().contains(queryLower) { return true }
+        return false
     }
 }
 
@@ -911,6 +1021,7 @@ struct JobInactiveColleaguesView: View {
                 }
             }
             .cardListStyle()
+            .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
             .navigationTitle("Inaktive Kollegen")
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: days) {
@@ -1036,19 +1147,23 @@ struct ConductEntryDetailView: View {
                     VStack(alignment: .leading, spacing: Theme.Spacing.md) {
                         if entry.hasTargetUser {
                             NavigationLink(value: ColleagueRoute(userID: entry.targetUser.userID)) {
-                                LabeledContent {
-                                    colleagueBadge(entry.targetUser)
-                                } label: {
+                                HStack(alignment: .top) {
                                     Label("Ziel", systemImage: "person.fill")
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    colleagueBadge(entry.targetUser)
+                                        .multilineTextAlignment(.trailing)
                                 }
                             }
                         }
                         if entry.hasCreator {
                             NavigationLink(value: ColleagueRoute(userID: entry.creator.userID)) {
-                                LabeledContent {
-                                    colleagueBadge(entry.creator)
-                                } label: {
+                                HStack(alignment: .top) {
                                     Label("Erstellt von", systemImage: "person.badge.key")
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    colleagueBadge(entry.creator)
+                                        .multilineTextAlignment(.trailing)
                                 }
                             }
                         }

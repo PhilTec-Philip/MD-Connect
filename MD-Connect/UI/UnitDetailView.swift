@@ -11,8 +11,6 @@ struct UnitDetailView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var errorText: String?
-    @State private var selectedStatus: Resources_Centrum_Units_StatusUnit = .available
-    @State private var showStatusPicker = false
 
     var body: some View {
         Group {
@@ -39,9 +37,6 @@ struct UnitDetailView: View {
         .task {
             await load()
         }
-        .sheet(isPresented: $showStatusPicker) {
-            statusSheet
-        }
         .alert("Fehler", isPresented: Binding(
             get: { errorText != nil },
             set: { if !$0 { errorText = nil } }
@@ -59,7 +54,21 @@ struct UnitDetailView: View {
                 icon: "building.2.fill",
                 title: unit.name,
                 subtitle: unitJobLine(unit),
-                badges: unitBadges(unit)
+                badges: unitBadges(unit),
+                actions: {
+                    if unit.id == appState.ownUnitID {
+                        HeroStatusButtons(
+                            items: Self.heroStatusItems(unit),
+                            isActive: { status in unit.status.status == status },
+                            action: { status in
+                                Task {
+                                    await appState.updateUnitStatus(unit.id, status: status)
+                                    await load()
+                                }
+                            }
+                        )
+                    }
+                }
             ))
 
             Section("Details") {
@@ -76,18 +85,7 @@ struct UnitDetailView: View {
                 }
             }
 
-            Section {
-                Button {
-                    selectedStatus = unit.status.status == .available ? .busy : .available
-                    showStatusPicker = true
-                } label: {
-                    Label("Status ändern", systemImage: "arrow.left.arrow.right")
-                }
-            } footer: {
-                Text("Setzt den Status der Einheit (z. B. verfügbar, Pause, beschäftigt).")
-            }
-
-            if unit.id != appState.ownUnitID {
+            if unit.id != appState.ownUnitID && appState.isOnDuty {
                 Section {
                     Button {
                         Task { await joinUnit(unit) }
@@ -166,6 +164,12 @@ struct UnitDetailView: View {
         return result
     }
 
+    private static func heroStatusItems(_ unit: Resources_Centrum_Units_Unit) -> [HeroStatusButtons<Resources_Centrum_Units_StatusUnit>.Item] {
+        statusOptions.map { status in
+            .init(status: status, label: status.label, icon: status.icon, color: status.color)
+        }
+    }
+
     private func row(_ title: String, _ value: String) -> some View {
         HStack {
             Text(title).foregroundStyle(.secondary)
@@ -214,35 +218,6 @@ struct UnitDetailView: View {
         if entry.hasReason, !entry.reason.isEmpty { parts.append(entry.reason) }
         parts.append(formatRelative(entry.createdAt))
         return parts.joined(separator: " · ")
-    }
-
-    private var statusSheet: some View {
-        NavigationStack {
-            Form {
-                Picker("Status", selection: $selectedStatus) {
-                    ForEach(Self.statusOptions, id: \.self) { status in
-                        Text(status.label).tag(status)
-                    }
-                }
-            }
-            .navigationTitle("Status ändern")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { showStatusPicker = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") {
-                        Task {
-                            await appState.updateUnitStatus(unitID, status: selectedStatus)
-                            showStatusPicker = false
-                            await load()
-                        }
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium])
     }
 
     private static var statusOptions: [Resources_Centrum_Units_StatusUnit] {

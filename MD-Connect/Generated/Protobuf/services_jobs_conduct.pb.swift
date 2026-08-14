@@ -15,8 +15,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
-
 
 // DO NOT EDIT.
 // swift-format-ignore-file
@@ -84,7 +82,14 @@ nonisolated struct Services_Jobs_ListConductEntriesRequest: Sendable {
   /// Clears the value of `showDrafts`. Subsequent reads from it will return its default value.
   mutating func clearShowDrafts() {self._showDrafts = nil}
 
-  var userIds: [Int32] = []
+  var users: Resources_Jobs_UserSelector {
+    get {_users ?? Resources_Jobs_UserSelector()}
+    set {_users = newValue}
+  }
+  /// Returns true if `users` has been explicitly set.
+  var hasUsers: Bool {self._users != nil}
+  /// Clears the value of `users`. Subsequent reads from it will return its default value.
+  mutating func clearUsers() {self._users = nil}
 
   var ids: [Int64] = []
 
@@ -105,6 +110,7 @@ nonisolated struct Services_Jobs_ListConductEntriesRequest: Sendable {
   fileprivate var _sort: Resources_Common_Database_Sort? = nil
   fileprivate var _showExpired: Bool? = nil
   fileprivate var _showDrafts: Bool? = nil
+  fileprivate var _users: Resources_Jobs_UserSelector? = nil
   fileprivate var _showDeleted: Bool? = nil
 }
 
@@ -276,7 +282,7 @@ fileprivate nonisolated let _protobuf_package = "services.jobs"
 
 nonisolated extension Services_Jobs_ListConductEntriesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".ListConductEntriesRequest"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pagination\0\u{1}sort\0\u{1}types\0\u{3}show_expired\0\u{3}show_drafts\0\u{3}user_ids\0\u{1}ids\0\u{3}show_deleted\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}pagination\0\u{1}sort\0\u{1}types\0\u{3}show_expired\0\u{3}show_drafts\0\u{1}users\0\u{1}ids\0\u{3}show_deleted\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -289,7 +295,7 @@ nonisolated extension Services_Jobs_ListConductEntriesRequest: SwiftProtobuf.Mes
       case 3: try { try decoder.decodeRepeatedEnumField(value: &self.types) }()
       case 4: try { try decoder.decodeSingularBoolField(value: &self._showExpired) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self._showDrafts) }()
-      case 6: try { try decoder.decodeRepeatedInt32Field(value: &self.userIds) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._users) }()
       case 7: try { try decoder.decodeRepeatedInt64Field(value: &self.ids) }()
       case 8: try { try decoder.decodeSingularBoolField(value: &self._showDeleted) }()
       default: break
@@ -317,9 +323,9 @@ nonisolated extension Services_Jobs_ListConductEntriesRequest: SwiftProtobuf.Mes
     try { if let v = self._showDrafts {
       try visitor.visitSingularBoolField(value: v, fieldNumber: 5)
     } }()
-    if !self.userIds.isEmpty {
-      try visitor.visitPackedInt32Field(value: self.userIds, fieldNumber: 6)
-    }
+    try { if let v = self._users {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    } }()
     if !self.ids.isEmpty {
       try visitor.visitPackedInt64Field(value: self.ids, fieldNumber: 7)
     }
@@ -335,7 +341,7 @@ nonisolated extension Services_Jobs_ListConductEntriesRequest: SwiftProtobuf.Mes
     if lhs.types != rhs.types {return false}
     if lhs._showExpired != rhs._showExpired {return false}
     if lhs._showDrafts != rhs._showDrafts {return false}
-    if lhs.userIds != rhs.userIds {return false}
+    if lhs._users != rhs._users {return false}
     if lhs.ids != rhs.ids {return false}
     if lhs._showDeleted != rhs._showDeleted {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

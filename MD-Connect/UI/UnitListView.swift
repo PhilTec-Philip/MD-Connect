@@ -38,17 +38,13 @@ struct UnitListView: View {
         return result
     }
 
-    @State private var selectedUnitID: Int64?
-
     var body: some View {
         Group {
             List {
                 ForEach(sections) { section in
                     Section(section.title) {
                         ForEach(section.units) { unit in
-                            Button {
-                                selectedUnitID = unit.id
-                            } label: {
+                            NavigationLink(value: CentrumRoute.unit(unit.id)) {
                                 UnitRow(unit: unit)
                             }
                             .buttonStyle(.plain)
@@ -58,6 +54,7 @@ struct UnitListView: View {
                 }
             }
             .cardListStyle()
+            .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
             .overlay {
                 if sections.isEmpty {
                     EmptyStateView(
@@ -71,9 +68,6 @@ struct UnitListView: View {
             .refreshable {
                 await appState.loadUnits()
             }
-        }
-        .navigationDestination(item: $selectedUnitID) { id in
-            UnitDetailView(unitID: id)
         }
     }
 }
@@ -115,7 +109,6 @@ private struct UnitRow: View {
             .padding(.vertical, Theme.Spacing.xs)
 
             Spacer(minLength: 0)
-            CardChevron()
         }
         .padding(Theme.Spacing.md)
         .padding(.trailing, Theme.Spacing.sm)

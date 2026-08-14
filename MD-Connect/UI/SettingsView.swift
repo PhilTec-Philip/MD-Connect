@@ -292,18 +292,12 @@ struct SettingsView: View {
     }
 
     private var systemRows: [(icon: String, title: String, subtitle: String, route: SettingsSubRoute)] {
-        [
+        var rows: [(icon: String, title: String, subtitle: String, route: SettingsSubRoute)] = [
             (
                 "externaldrive.fill",
                 "Datenspeicher",
                 "Hochgeladene Dateien verwalten",
                 .storage
-            ),
-            (
-                "person.crop.circle.badge.checkmark",
-                "Konten",
-                "Benutzerkonten verwalten",
-                .accounts
             ),
             (
                 "server.rack",
@@ -324,6 +318,19 @@ struct SettingsView: View {
                 .about
             ),
         ]
+        // Konten ist ConfigAdmin-gated (Server-System-Permission), kein normaler Guard-Name.
+        if appState.canBeConfigAdmin {
+            rows.insert(
+                (
+                    "person.crop.circle.badge.checkmark",
+                    "Konten",
+                    "Benutzerkonten verwalten",
+                    .accounts
+                ),
+                at: 1
+            )
+        }
+        return rows
     }
 
     private func moreSection(_ props: Resources_Jobs_Props_JobProps) -> some View {
@@ -375,6 +382,7 @@ struct SettingsView: View {
                                 .buttonStyle(.plain)
                             }
                         }
+                        .padding(Theme.Spacing.md)
                     }
                     .cardRow()
                 }

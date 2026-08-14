@@ -117,11 +117,14 @@ struct CalendarView: View {
     @State private var absences: [CalendarAbsence] = []
     @State private var events: [CalendarEvent] = []
     @State private var calendarIDs: [Int64] = []
+    @State private var calendars: [Resources_Calendar_Calendar] = []
     @State private var isLoading = false
     @State private var isLoadingEntries = false
     @State private var errorMessage: String?
     @State private var selectedEvent: CalendarEvent?
     @State private var selectedColleagueID: Int32?
+    @State private var showDateJump = false
+    @State private var showCreateEntry = false
 
     /// Kalender mit Montag als Wochenstart (deutsche Woche).
     private var calendar: Calendar {
@@ -239,12 +242,44 @@ struct CalendarView: View {
             .pendingAlarmBell()
             .moduleNavTitle(.calendar)
             .navConnectionDot()
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showDateJump = true
+                    } label: {
+                        Label("Datum springen", systemImage: "calendar.badge.clock")
+                    }
+                    .accessibilityLabel("Datum springen")
+                }
+                if appState.can("calendar.EntriesService/CreateOrUpdateCalendarEntry") {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showCreateEntry = true
+                        } label: {
+                            Label("Termin erstellen", systemImage: "plus")
+                        }
+                        .accessibilityLabel("Termin erstellen")
+                    }
+                }
+            }
             .task { await load() }
             .onChange(of: visibleMonth) {
                 Task { await loadEntries() }
             }
             .sheet(item: $selectedEvent) { event in
                 CalendarEventDetailSheet(event: event)
+            }
+            .sheet(isPresented: $showDateJump) {
+                CalendarDateJumpSheet(selectedDate: selectedDay) { date in
+                    selectedDay = Calendar.current.startOfDay(for: date)
+                    visibleMonth = Self.monthStart(for: date)
+                }
+            }
+            .sheet(isPresented: $showCreateEntry) {
+                CalendarEntryCreateSheet(calendars: calendars, defaultDate: selectedDay) {
+                    await loadEntries()
+                }
+                .environment(appState)
             }
         }
         .navigationDestination(item: $selectedColleagueID) { userID in
@@ -480,11 +515,13 @@ struct CalendarView: View {
         var offset: Int64 = 0
         while true {
             guard let response = try? await appState.listCalendars(offset: offset, pageSize: 50) else { break }
-            ids.append(contentsOf: response.calendars.map { $0.id })
+            let page = response.calendars
+            ids.append(contentsOf: page.map { $0.id })
+            calendars = page
             let total = response.pagination.totalCount
             if total > 0 && Int64(ids.count) >= total { break }
-            if response.calendars.count < 50 { break }
-            offset += Int64(response.calendars.count)
+            if page.count < 50 { break }
+            offset += Int64(page.count)
             if offset > 1000 { break }
         }
         return ids
@@ -615,5 +652,212 @@ private struct CalendarEventDetailSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// Sheet zum Springen zu einem beliebigen Datum: Datum als Texteingabe
+/// (TT.MM.JJJJ) ODER über den grafischen DatePicker wählen und dann springen.
+private struct CalendarDateJumpSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var date: Date
+    @State private var dateText: String
+    let onJump: (Date) -> Void
+
+    init(selectedDate: Date, onJump: @escaping (Date) -> Void) {
+        _date = State(initialValue: selectedDate)
+        _dateText = State(initialValue: Self.dateFormatter.string(from: selectedDate))
+        self.onJump = onJump
+    }
+
+    /// dd.MM.yyyy-Parser für die Texteingabe (deutsches Datumsformat).
+    private static var dateFormatter: DateFormatter {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "de_DE")
+        f.dateFormat = "dd.MM.yyyy"
+        return f
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    TextField("TT.MM.JJJJ", text: $dateText)
+                        .keyboardType(.numbersAndPunctuation)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onChange(of: dateText) {
+                            if let parsed = Self.dateFormatter.date(from: dateText) {
+                                date = parsed
+                            }
+                        }
+                } header: {
+                    Text("Datum eingeben")
+                } footer: {
+                    Text("Format: TT.MM.JJJJ (z. B. 24.12.2026)")
+                }
+            }
+            .navigationTitle("Datum springen")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Abbrechen") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Springen") {
+                        onJump(date)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+}
+
+/// Sheet zum Erstellen eines neuen Kalendereintrags im ausgewählten Kalender.
+private struct CalendarEntryCreateSheet: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+
+    let calendars: [Resources_Calendar_Calendar]
+    let defaultDate: Date
+
+    /// Wird nach dem erfolgreichen Anlegen aufgerufen (lädt den Monat neu).
+    let onSaved: () async -> Void
+
+    /// Optionaler Kalender, damit ein leerer Calendar-Picker keinen ungültigen
+    /// Tag (0) auswählt („Picker selection 0 invalid“).
+    @State private var calendarID: Int64?
+    @State private var title = ""
+    @State private var start = Date()
+    @State private var end = Date().addingTimeInterval(3600)
+    @State private var isAllDay = false
+    @State private var showContent = false
+    @State private var contentText = ""
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    init(calendars: [Resources_Calendar_Calendar], defaultDate: Date, onSaved: @escaping () async -> Void) {
+        self.calendars = calendars
+        self.defaultDate = defaultDate
+        self.onSaved = onSaved
+        _start = State(initialValue: defaultDate)
+        _end = State(initialValue: defaultDate.addingTimeInterval(3600))
+        _calendarID = State(initialValue: calendars.first?.id)
+    }
+
+    private var canSave: Bool {
+        !(calendarID == nil) && !title.isEmpty && !isSaving
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Kalender") {
+                    Picker("Kalender", selection: $calendarID) {
+                        ForEach(calendars, id: \.id) { calendar in
+                            Label(calendar.name, systemImage: "calendar")
+                                .tag(Optional(calendar.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .onAppear {
+                        if calendarID == nil, let first = calendars.first {
+                            calendarID = first.id
+                        }
+                    }
+                }
+
+                Section("Eintrag") {
+                    TextField("Titel", text: $title)
+                    Toggle("Ganztägig", isOn: $isAllDay)
+                    DatePicker("Beginn", selection: $start, displayedComponents: isAllDay ? .date : [.date, .hourAndMinute])
+                    if !isAllDay {
+                        DatePicker("Ende", selection: $end, displayedComponents: [.date, .hourAndMinute])
+                    }
+                }
+
+                Section("Inhalt") {
+                    Toggle("Beschreibung hinzufügen", isOn: $showContent)
+                    if showContent {
+                        TextEditor(text: $contentText)
+                            .frame(minHeight: 120)
+                    }
+                }
+
+                if let errorMessage {
+                    Section {
+                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill", tint: Theme.Palette.danger)
+                    }
+                }
+            }
+            .navigationTitle("Termin erstellen")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Abbrechen") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Speichern") {
+                        Task { await save() }
+                    }
+                    .disabled(!canSave)
+                }
+            }
+        }
+    }
+
+    private func save() async {
+        guard let calendarID else { return }
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+
+        var entry = Resources_Calendar_Entries_CalendarEntry()
+        entry.calendarID = calendarID
+        entry.title = title
+        entry.startTime = toTimestampProto(start)
+        if !isAllDay {
+            entry.endTime = toTimestampProto(end)
+        }
+        if showContent, !contentText.isEmpty {
+            var content = Resources_Common_Content_Content()
+            content.contentType = .tiptapJson
+            content.tiptapJson = Self.tiptapDoc(text: contentText)
+            entry.content = content
+        }
+
+        do {
+            _ = try await appState.createOrUpdateCalendarEntry(entry)
+            await onSaved()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Builds a minimal Tiptap document struct for plain text (same as the
+    /// conduct entry sheet).
+    private static func tiptapDoc(text: String) -> SwiftProtobuf.Google_Protobuf_Struct {
+        var doc = SwiftProtobuf.Google_Protobuf_Struct()
+        doc.fields["type"] = .with { $0.stringValue = "doc" }
+
+        var paragraph = SwiftProtobuf.Google_Protobuf_Struct()
+        paragraph.fields["type"] = .with { $0.stringValue = "paragraph" }
+
+        var textNode = SwiftProtobuf.Google_Protobuf_Struct()
+        textNode.fields["type"] = .with { $0.stringValue = "text" }
+        textNode.fields["text"] = .with { $0.stringValue = text }
+
+        paragraph.fields["content"] = .with { $0.listValue = .with {
+            $0.values = [SwiftProtobuf.Google_Protobuf_Value.with { $0.structValue = textNode }]
+        } }
+
+        doc.fields["content"] = .with { $0.listValue = .with {
+            $0.values = [SwiftProtobuf.Google_Protobuf_Value.with { $0.structValue = paragraph }]
+        } }
+
+        return doc
     }
 }

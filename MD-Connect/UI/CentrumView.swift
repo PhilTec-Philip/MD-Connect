@@ -40,6 +40,8 @@ struct CentrumView: View {
                     Label("Archiv", systemImage: "archivebox")
                 }
         }
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .pendingAlarmBell()
         .moduleNavTitle(.centrum)
         .navConnectionDot()
@@ -85,10 +87,10 @@ struct CentrumView: View {
                 .environment(appState)
         }
         .task {
-            await appState.loadCentrum()
+            await appState.startCentrumStream()
         }
         .task {
-            await appState.startCentrumStream()
+            await appState.loadCentrum()
         }
         .alert("Leitstellen-Fehler", isPresented: Binding(
             get: { appState.centrumError != nil },

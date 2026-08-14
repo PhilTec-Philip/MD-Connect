@@ -369,7 +369,7 @@ extension Resources_Jobs_Colleagues_Activity_ColleagueActivityType {
 }
 
 /// Simple flow layout for wrapping label badges.
-private struct FlowLayout: Layout {
+struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

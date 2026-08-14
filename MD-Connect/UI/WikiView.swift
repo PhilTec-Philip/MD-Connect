@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftProtobuf
 
 /// Wiki module overview: shows one entry per job wiki (root pages) and
 /// supports full-text search across all pages.
@@ -104,11 +105,19 @@ struct WikiView: View {
                         .tint(.cyan)
                     }
                 }
-            } footer: {
-                if !rootPages.isEmpty {
-                    Text("\(rootPages.count) Wiki-Bereiche")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            }
+
+            if !rootPages.isEmpty {
+                Section {
+                    SectionCard {
+                        HStack {
+                            Text("\(rootPages.count) Wiki-Bereiche")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                    }
+                    .cardRow()
                 }
             }
         }
@@ -158,22 +167,28 @@ struct WikiView: View {
         errorMessage = nil
         do {
             let response = try await appState.listWikiPages(rootOnly: true, pageSize: 100)
-            var pages = response.pages.sorted {
-                let lhsPinned = appState.isWikiPinned($0.job)
-                let rhsPinned = appState.isWikiPinned($1.job)
-                if lhsPinned != rhsPinned { return lhsPinned }
-                let lhs = $0.jobLabel.isEmpty ? $0.job : $0.jobLabel
-                let rhs = $1.jobLabel.isEmpty ? $1.job : $1.jobLabel
-                return lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
-            }
-            if let ownJob = appState.character?.job, let index = pages.firstIndex(where: { $0.job == ownJob }), index > 0 {
-                pages.move(fromOffsets: IndexSet(integer: index), toOffset: 0)
-            }
-            rootPages = pages
+            rootPages = sortedRoots(response.pages)
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    /// Sorts root pages pinned-first, then by job label, moving the character's
+    /// own job to the top.
+    private func sortedRoots(_ pages: [Resources_Wiki_PageShort]) -> [Resources_Wiki_PageShort] {
+        var sorted = pages.sorted {
+            let lhsPinned = appState.isWikiPinned($0.job)
+            let rhsPinned = appState.isWikiPinned($1.job)
+            if lhsPinned != rhsPinned { return lhsPinned }
+            let lhs = $0.jobLabel.isEmpty ? $0.job : $0.jobLabel
+            let rhs = $1.jobLabel.isEmpty ? $1.job : $1.jobLabel
+            return lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+        }
+        if let ownJob = appState.character?.job, let index = sorted.firstIndex(where: { $0.job == ownJob }), index > 0 {
+            sorted.move(fromOffsets: IndexSet(integer: index), toOffset: 0)
+        }
+        return sorted
     }
 
     /// Re-applies the pinned-first sort without refetching.

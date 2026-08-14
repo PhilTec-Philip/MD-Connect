@@ -631,9 +631,19 @@ struct DocumentDetailView: View {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            document = try await appState.getDocument(id: documentID)
+            let loaded = try await appState.getDocument(id: documentID)
+            document = loaded
+            if let data: Data = try? loaded.serializedBytes() {
+                ViewedContentCache.shared.store(data, for: "doc-\(documentID)")
+            }
         } catch {
-            errorMessage = error.localizedDescription
+            if let cached = ViewedContentCache.shared.load(for: "doc-\(documentID)"),
+               let cachedDocument = try? Resources_Documents_Document(serializedBytes: cached) {
+                document = cachedDocument
+                errorMessage = "Offline-Inhalt\(cachedDocument.hasUpdatedAt ? " (Stand \(formatTimestamp(cachedDocument.updatedAt)))" : "")"
+            } else {
+                errorMessage = error.localizedDescription
+            }
         }
         await loadTabIfNeeded()
     }
@@ -785,7 +795,7 @@ extension Resources_Documents_Access_AccessLevel {
 }
 
 /// Simple horizontal wrapping layout for badge rows.
-private struct FlowLayout: Layout {
+private struct BadgeFlowLayout: Layout {
     var spacing: CGFloat = 6
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

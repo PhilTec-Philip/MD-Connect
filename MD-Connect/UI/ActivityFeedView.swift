@@ -51,6 +51,7 @@ struct ActivityFeedView: View {
             }
         }
         .cardListStyle()
+        .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
         .searchable(text: $searchText, prompt: "Aktivität durchsuchen")
         .refreshable {
             await appState.loadCentrum()

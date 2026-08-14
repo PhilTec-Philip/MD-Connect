@@ -2,7 +2,9 @@ import SwiftUI
 import SwiftProtobuf
 
 /// Einstellungen → Konten: listet die Benutzerkonten des Servers und erlaubt
-/// das Erstellen, Aktivieren/Deaktivieren und Löschen von Konten.
+/// das Aktivieren/Deaktivieren und Löschen von Konten. Konten werden nicht über
+/// die App erstellt — der Server implementiert `AccountsService/CreateAccount`
+/// nicht (v2026.8.0), auch das Web bietet keine Konten-Erstellung.
 struct SettingsAccountsView: View {
     @Environment(AppState.self) private var appState
 
@@ -15,11 +17,12 @@ struct SettingsAccountsView: View {
     @State private var errorMessage: String?
     @State private var searchText = ""
     @State private var searchTask: Task<Void, Never>?
-    @State private var showCreate = false
     @State private var accountToDelete: Resources_Accounts_Account?
 
+    /// Konten-RPCs sind auf dem Server ConfigAdmin-gated (System-Permission
+    /// `internal.Superuser/ConfigAdmin`, NICHT `settings.AccountsService/…`).
     private var canEdit: Bool {
-        appState.can("settings.AccountsService/CreateAccount") || appState.can("settings.AccountsService/UpdateAccount")
+        appState.canBeConfigAdmin
     }
 
     private var totalPages: Int64 {
@@ -69,7 +72,7 @@ struct SettingsAccountsView: View {
                         })
                         .cardRow()
                         .swipeActions(edge: .trailing) {
-                            if appState.can("settings.AccountsService/DeleteAccount") {
+                            if appState.canBeConfigAdmin {
                                 Button(role: .destructive) {
                                     accountToDelete = account
                                 } label: {
@@ -125,24 +128,6 @@ struct SettingsAccountsView: View {
             scheduleSearch()
         }
         .task { await load() }
-        .toolbar {
-            if appState.can("settings.AccountsService/CreateAccount") {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showCreate = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .accessibilityLabel("Konto erstellen")
-                }
-            }
-        }
-        .sheet(isPresented: $showCreate) {
-            SettingsCreateAccountSheet(onCreated: {
-                showCreate = false
-                Task { await load() }
-            })
-        }
         .confirmationDialog(
             "Konto löschen?",
             isPresented: Binding(get: { accountToDelete != nil }, set: { if !$0 { accountToDelete = nil } }),
@@ -250,77 +235,6 @@ private struct SettingsAccountRow: View {
         .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
-    }
-}
-
-/// Sheet zum Erstellen eines Kontos.
-struct SettingsCreateAccountSheet: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
-
-    var onCreated: () -> Void
-
-    @State private var license = ""
-    @State private var username = ""
-    @State private var isSaving = false
-    @State private var errorMessage: String?
-    @State private var regToken: String?
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Konto") {
-                    TextField("Lizenz (Steam/…)", text: $license)
-                        .autocorrectionDisabled()
-                    TextField("Benutzername", text: $username)
-                        .autocorrectionDisabled()
-                }
-
-                if let regToken {
-                    Section("Registrierung") {
-                        StatusLabelRow("Registrierungstoken: \(regToken)", systemImage: "ticket.fill")
-                    }
-                }
-
-                if let errorMessage {
-                    Section {
-                        StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                    }
-                }
-            }
-            .navigationTitle("Konto erstellen")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Erstellen") {
-                        save()
-                    }
-                    .disabled(isSaving || license.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-        }
-        .interactiveDismissDisabled(regToken == nil)
-    }
-
-    private func save() {
-        isSaving = true
-        errorMessage = nil
-        Task {
-            do {
-                let token = try await appState.createAccount(
-                    license: license.trimmingCharacters(in: .whitespacesAndNewlines),
-                    username: username.trimmingCharacters(in: .whitespacesAndNewlines)
-                )
-                regToken = token
-                isSaving = false
-            } catch {
-                errorMessage = error.localizedDescription
-                isSaving = false
-            }
-        }
     }
 }
 

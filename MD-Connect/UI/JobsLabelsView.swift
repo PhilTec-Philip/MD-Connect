@@ -12,6 +12,7 @@ struct JobsLabelsView: View {
     @State private var isSaving = false
     @State private var showToast = false
     @State private var toastMessage = ""
+    @State private var deletedLabelIDs: [Int64] = []
 
     var body: some View {
         Form {
@@ -39,6 +40,12 @@ struct JobsLabelsView: View {
                         LabelEditorRow(label: $label)
                     }
                     .onDelete { offsets in
+                        for offset in offsets {
+                            let id = labels[offset].id
+                            if id > 0 {
+                                deletedLabelIDs.append(id)
+                            }
+                        }
                         labels.remove(atOffsets: offsets)
                     }
                 }
@@ -83,6 +90,7 @@ struct JobsLabelsView: View {
         defer { isLoading = false }
         do {
             labels = try await appState.getColleagueLabels()
+            deletedLabelIDs = []
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -93,7 +101,17 @@ struct JobsLabelsView: View {
         errorMessage = nil
         defer { isSaving = false }
         do {
-            labels = try await appState.manageLabels(labels)
+            for label in labels {
+                let saved = try await appState.createOrUpdateLabel(label)
+                if saved.id > 0, let index = labels.firstIndex(where: { $0.id == label.id }) {
+                    labels[index] = saved
+                }
+            }
+            for id in deletedLabelIDs {
+                try await appState.deleteLabel(id: id)
+            }
+            try await appState.reorderLabels(labels.map(\.id))
+            deletedLabelIDs = []
             toastMessage = "Labels gespeichert"
             showToast = true
         } catch {

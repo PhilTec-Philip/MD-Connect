@@ -28,7 +28,7 @@ struct SettingsRoleDetailView: View {
                     SkeletonListRow()
                 }
             } else if let role {
-                detailHeroSection(
+                Section {
                     DetailHero(
                         gradient: FiveNetModule.settings.gradient,
                         icon: "person.badge.key.fill",
@@ -36,7 +36,8 @@ struct SettingsRoleDetailView: View {
                         subtitle: role.hasJobGradeLabel && !role.jobGradeLabel.isEmpty ? role.jobGradeLabel : nil,
                         badges: [role.job]
                     )
-                )
+                    .cardRow()
+                }
 
                 Section {
                     SectionCard {

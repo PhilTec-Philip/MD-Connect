@@ -16,22 +16,20 @@ struct CentrumActivityEntry: Identifiable, Equatable {
         timestamp = status.createdAt
         icon = status.feedIcon
         let unitName = (unit ?? status.unit).name
-        title = unitName.isEmpty
-            ? "Einheit #\(status.unitID): \(status.feedLabel)"
-            : "\(unitName): \(status.feedLabel)"
-        subtitle = Self.subtitle(reason: status.reason, code: status.code, user: status.user)
+        title = unitName.isEmpty ? "Einheit #\(status.unitID)" : unitName
+        subtitle = Self.subtitle(status: status.feedLabel, reason: status.reason, code: status.code, user: status.user)
     }
 
     init(dispatchStatus status: Resources_Centrum_Dispatches_DispatchStatus) {
         id = status.id
         timestamp = status.createdAt
         icon = status.feedIcon
-        title = "\(formatDispatchID(status.dispatchID)): \(status.feedLabel)"
-        subtitle = Self.subtitle(reason: status.reason, code: status.code, user: status.user)
+        title = formatDispatchID(status.dispatchID)
+        subtitle = Self.subtitle(status: status.feedLabel, reason: status.reason, code: status.code, user: status.user)
     }
 
-    private static func subtitle(reason: String, code: String, user: Resources_Jobs_Colleagues_Colleague) -> String {
-        var parts: [String] = []
+    private static func subtitle(status: String, reason: String, code: String, user: Resources_Jobs_Colleagues_Colleague) -> String {
+        var parts: [String] = [status]
         if !code.isEmpty { parts.append("Code \(code)") }
         if !reason.isEmpty { parts.append(reason) }
         parts.append("von \(colleagueName(user))")
@@ -42,8 +40,26 @@ struct CentrumActivityEntry: Identifiable, Equatable {
 /// A fullscreen dispatch alarm shown when the character's own unit is assigned
 /// to a dispatch. Carries the dispatch snapshot for the overlay UI.
 struct DispatchAlarm: Identifiable {
+    /// The kind of the alarm: a regular new assignment (red) or a
+    /// reinforcement request (yellow, `needAssistance`).
+    enum Kind {
+        case assignment
+        case reinforcement
+    }
+
     let id: Int64
     let dispatch: Resources_Centrum_Dispatches_Dispatch
+    let kind: Kind
+    /// The colleague who triggered the alarm (e.g. the requesting unit for a
+    /// reinforcement). Falls back to the dispatch creator when unavailable.
+    let requester: Resources_Jobs_Colleagues_Colleague?
+
+    init(id: Int64, dispatch: Resources_Centrum_Dispatches_Dispatch, kind: Kind = .assignment, requester: Resources_Jobs_Colleagues_Colleague? = nil) {
+        self.id = id
+        self.dispatch = dispatch
+        self.kind = kind
+        self.requester = requester
+    }
 }
 
 /// Central application coordinator: drives the auth flow, owns the network client
@@ -157,6 +173,7 @@ final class AppState {
         favoriteUnitIDs = Set((UserDefaults.standard.array(forKey: "favoriteUnitIDs") as? [Int64]) ?? [])
         pinnedWikiJobs = (UserDefaults.standard.array(forKey: "pinnedWikiJobs") as? [String]) ?? []
         loadDutyUnitID()
+        loadClosedDispatchIDs()
         if let serverURL = self.session.serverURL {
             makeClient(baseURL: serverURL)
         }
@@ -248,6 +265,7 @@ final class AppState {
     func switchCharacter() {
         errorMessage = nil
         resetSessionData()
+        loadClosedDispatchIDs()
         characterUserID = nil
         Task { await loadCharacters() }
     }
@@ -268,6 +286,7 @@ final class AppState {
     private func enterSelectedServer() {
         loadDutyUnitID()
         resetSessionData()
+        loadClosedDispatchIDs()
         if session.accountToken != nil || session.userToken != nil {
             phase = .chooseCharacter
             Task { await loadCharacters() }
@@ -471,11 +490,12 @@ final class AppState {
         return permissions.contains { $0.guardName == guardName }
     }
 
-    /// True when the account can access config-admin gated screens (web
-    /// `canBeConfigAdmin`). Config-admin is account-level; the permission itself
-    /// is not delivered in the character payload, so this stays conservative.
+    /// True when the account can access config-admin gated screens and RPCs
+    /// (web `canBeConfigAdmin`). The server delivers `PermConfigAdmin`
+    /// (`internal-superuser-configadmin`) in the character permission list when
+    /// the account is config-admin eligible (auth.go), mirroring `isSuperuser`.
     var canBeConfigAdmin: Bool {
-        false
+        permissions.contains { $0.guardName == Self.configAdminPermGuard }
     }
 
     /// True when the account is allowed to switch into superuser mode. Without a
@@ -682,7 +702,13 @@ final class AppState {
             try await ensureChannel()
             let response = try await client.listDispatches()
             dispatches = activeDispatches(response.dispatches)
-            await verifyUnitUnassignedDispatches(response.dispatches)
+            // Resolve ambiguous `.unitUnassigned` dispatches in the background so
+            // the list renders immediately; known-closed ids are already filtered
+            // from the persisted per-server set (no network round-trips on relaunch).
+            let candidates = response.dispatches
+            Task { [weak self] in
+                await self?.verifyUnitUnassignedDispatches(candidates)
+            }
         } catch {
             centrumError = Self.describe(error)
         }
@@ -696,33 +722,67 @@ final class AppState {
         return dispatch
     }
 
+    /// Searches dispatches by id, postal code and creator (used by global search).
+    func searchDispatches(ids: [Int64] = [], postal: String = "", creatorIds: [Int32] = [], status: [Resources_Centrum_Dispatches_StatusDispatch] = [], offset: Int64 = 0, pageSize: Int64 = 100) async throws -> Services_Centrum_ListDispatchesResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.searchDispatches(ids: ids, postal: postal, creatorIds: creatorIds, status: status, offset: offset, pageSize: pageSize)
+    }
+
+    /// Fetches the dispatch heatmap overlay (weighted dispatch hotspots).
+    func getDispatchHeatmap() async throws -> Services_Centrum_GetDispatchHeatmapResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.getDispatchHeatmap()
+    }
+
     /// Statuses that are considered "closed" and are hidden from the live
     /// Leitstelle list and the livemap.
     private static let closedDispatchStatuses: Set<Resources_Centrum_Dispatches_StatusDispatch> = [
         .completed, .cancelled, .archived, .deleted,
     ]
 
-    /// Dispatch ids that are considered closed. Derived from the dispatch
-    /// activity feed (session only), so completed dispatches stay archived even
-    /// after a restart without needing to persist ids: the server appends a
-    /// `UNIT_UNASSIGNED` status row whenever a unit is removed, which would
-    /// otherwise revive the dispatch (latest DB status becomes `.unitUnassigned`).
+    /// Dispatch ids that are considered closed. Persisted per server so a
+    /// relaunch filters known-closed dispatches instantly (no network call):
+    /// the server appends a `UNIT_UNASSIGNED` status row whenever a unit is
+    /// removed - even from a completed dispatch - so `ListDispatches` (latest DB
+    /// status) would otherwise revive a closed dispatch as `.unitUnassigned`.
     private(set) var closedDispatchIDs: Set<Int64> = []
 
     /// Dispatch ids whose activity feed was already checked this session, to
     /// avoid refetching the activity for the same dispatch on every refresh.
     private var verifiedClosedDispatchIDs: Set<Int64> = []
 
+    private static func closedDispatchIDsKey(for url: URL) -> String {
+        "closedDispatchIDs#\(url.absoluteString)"
+    }
+
+    /// Restores the persisted closed dispatch ids of the currently active server.
+    private func loadClosedDispatchIDs() {
+        guard let serverURL = session.serverURL else {
+            closedDispatchIDs = []
+            return
+        }
+        closedDispatchIDs = Set((UserDefaults.standard.array(forKey: Self.closedDispatchIDsKey(for: serverURL)) as? [Int64]) ?? [])
+    }
+
+    /// Persists the closed dispatch ids for the currently active server.
+    private func persistClosedDispatchIDs() {
+        guard let serverURL = session.serverURL else { return }
+        UserDefaults.standard.set(Array(closedDispatchIDs), forKey: Self.closedDispatchIDsKey(for: serverURL))
+    }
+
     /// Filters a list of dispatches down to the active (non-closed) ones.
     /// Dispatches that have ever been closed remain hidden.
     func activeDispatches(_ dispatches: [Resources_Centrum_Dispatches_Dispatch]) -> [Resources_Centrum_Dispatches_Dispatch] {
-        dispatches.filter { dispatch in
+        var changed = false
+        let filtered = dispatches.filter { dispatch in
             if Self.closedDispatchStatuses.contains(dispatch.status.status) {
-                closedDispatchIDs.insert(dispatch.id)
+                changed = closedDispatchIDs.insert(dispatch.id).inserted || changed
                 return false
             }
             return !closedDispatchIDs.contains(dispatch.id)
         }
+        if changed { persistClosedDispatchIDs() }
+        return filtered
     }
 
     /// Checks the activity feed of dispatches whose latest status is ambiguous
@@ -732,20 +792,48 @@ final class AppState {
     /// history ever reached a closed status, the dispatch stays hidden.
     func verifyUnitUnassignedDispatches(_ dispatches: [Resources_Centrum_Dispatches_Dispatch]) async {
         guard let client else { return }
-        for dispatch in dispatches {
-            guard dispatch.status.status == .unitUnassigned,
-                  !closedDispatchIDs.contains(dispatch.id),
-                  !verifiedClosedDispatchIDs.contains(dispatch.id) else { continue }
-            verifiedClosedDispatchIDs.insert(dispatch.id)
-            do {
-                let activity = try await client.listDispatchActivity(dispatchID: dispatch.id, pageSize: 100)
-                if activity.activity.contains(where: { Self.closedDispatchStatuses.contains($0.status) }) {
-                    closedDispatchIDs.insert(dispatch.id)
-                    self.dispatches.removeAll { $0.id == dispatch.id }
+        let candidates = dispatches.filter {
+            $0.status.status == .unitUnassigned
+                && !closedDispatchIDs.contains($0.id)
+                && !verifiedClosedDispatchIDs.contains($0.id)
+        }
+        guard !candidates.isEmpty else { return }
+        candidates.forEach { verifiedClosedDispatchIDs.insert($0.id) }
+
+        // The gRPC-Web channel supports max 7 concurrent streams; the centrum/
+        // livemap streams already occupy slots. Cloudflare-protected servers
+        // throttle bursts of concurrent HTTP/2/3 requests, so keep the parallel
+        // activity fetches low to avoid `nw_protocol` churn and slow/blocked loads.
+        let maxConcurrent = 3
+        var results: [Int64: Bool] = [:]
+        await withTaskGroup(of: (Int64, Bool).self) { group in
+            var iterator = candidates.makeIterator()
+            for _ in 0..<maxConcurrent {
+                if let next = iterator.next() {
+                    group.addTask { await Self.fetchClosedFlag(for: next.id, client: client) }
                 }
-            } catch {
-                // Ignore: keep the dispatch visible if the activity can't be fetched.
             }
+            while let (id, isClosed) = await group.next() {
+                results[id] = isClosed
+                if let next = iterator.next() {
+                    group.addTask { await Self.fetchClosedFlag(for: next.id, client: client) }
+                }
+            }
+        }
+
+        for (id, isClosed) in results where isClosed {
+            closedDispatchIDs.insert(id)
+            self.dispatches.removeAll { $0.id == id }
+        }
+        persistClosedDispatchIDs()
+    }
+
+    private static func fetchClosedFlag(for id: Int64, client: FiveNetClient) async -> (Int64, Bool) {
+        do {
+            let activity = try await client.listDispatchActivity(dispatchID: id, pageSize: 100)
+            return (id, activity.activity.contains(where: { Self.closedDispatchStatuses.contains($0.status) }))
+        } catch {
+            return (id, false)
         }
     }
 
@@ -935,19 +1023,35 @@ final class AppState {
     /// the full dispatch snapshot is taken from the current dispatches list
     /// (fetched on demand when the update arrives before the dispatch itself).
     private func maybeTriggerAlarm(for status: Resources_Centrum_Dispatches_DispatchStatus) {
-        guard status.status == .unitAssigned,
-              let ownUnitID,
+        guard let ownUnitID,
               status.unitID == ownUnitID,
               !acceptedDispatchIDs.contains(status.dispatchID),
               !alarmedDispatchIDs.contains(status.dispatchID) else { return }
+        let kind: DispatchAlarm.Kind
+        switch status.status {
+        case .unitAssigned:
+            kind = .assignment
+        case .needAssistance:
+            kind = .reinforcement
+        default:
+            return
+        }
+        // A reinforcement request raised by the current character must not fire
+        // a panic for themselves — they already know they asked for help (the
+        // blinking "Verstärkung" status button shows the state). Firing anyway
+        // would hide the dispatch from "Dein Einsatz" via `pendingAlarmDispatchIDs`.
+        if kind == .reinforcement, isOwnReinforcementRequest(status) {
+            return
+        }
         alarmedDispatchIDs.insert(status.dispatchID)
+        let requester: Resources_Jobs_Colleagues_Colleague? = status.hasUser ? status.user : nil
         if let dispatch = dispatches.first(where: { $0.id == status.dispatchID }) {
-            activeAlarm = DispatchAlarm(id: status.dispatchID, dispatch: dispatch)
+            activeAlarm = DispatchAlarm(id: status.dispatchID, dispatch: dispatch, kind: kind, requester: requester)
         } else {
             Task { [weak self] in
                 guard let self, let client = self.client else { return }
                 if let dispatch = try? await client.getDispatch(id: status.dispatchID) {
-                    self.activeAlarm = DispatchAlarm(id: status.dispatchID, dispatch: dispatch)
+                    self.activeAlarm = DispatchAlarm(id: status.dispatchID, dispatch: dispatch, kind: kind, requester: requester)
                 } else {
                     self.alarmedDispatchIDs.remove(status.dispatchID)
                 }
@@ -960,13 +1064,35 @@ final class AppState {
     /// `dispatch_status` event. Triggers the alarm when the assigned unit is
     /// the character's own.
     private func maybeTriggerAlarm(for dispatch: Resources_Centrum_Dispatches_Dispatch) {
-        guard dispatch.status.status == .unitAssigned,
-              ownUnitID != nil,
+        guard ownUnitID != nil,
               !acceptedDispatchIDs.contains(dispatch.id),
               !alarmedDispatchIDs.contains(dispatch.id),
               targetsOwnUnit(dispatch) else { return }
+        let kind: DispatchAlarm.Kind
+        switch dispatch.status.status {
+        case .unitAssigned:
+            kind = .assignment
+        case .needAssistance:
+            kind = .reinforcement
+        default:
+            return
+        }
+        if kind == .reinforcement, isOwnReinforcementRequest(dispatch.status) {
+            return
+        }
         alarmedDispatchIDs.insert(dispatch.id)
-        activeAlarm = DispatchAlarm(id: dispatch.id, dispatch: dispatch)
+        activeAlarm = DispatchAlarm(id: dispatch.id, dispatch: dispatch, kind: kind, requester: dispatch.status.hasUser ? dispatch.status.user : nil)
+    }
+
+    /// Whether the reinforcement request on a `dispatch_status` event was raised
+    /// by the current character themselves (checked via the requester user id).
+    /// Such self-requests must not fire the reinforcement panic for the same
+    /// character that pressed the button.
+    private func isOwnReinforcementRequest(_ status: Resources_Centrum_Dispatches_DispatchStatus) -> Bool {
+        guard let currentUserID = activeCharacterUserID else { return false }
+        if status.hasUserID, status.userID == currentUserID { return true }
+        if status.hasUser, status.user.userID == currentUserID { return true }
+        return false
     }
 
     private func targetsOwnUnit(_ dispatch: Resources_Centrum_Dispatches_Dispatch) -> Bool {
@@ -1189,6 +1315,11 @@ final class AppState {
     private(set) var isLivemapStreamActive = false
     private(set) var livemapError: String?
 
+    /// Whether the active character is currently on duty ("im Dienst"), as
+    /// reported by the livemap stream (`user_on_duty`). Used to gate unit join
+    /// actions — the server rejects them with `ErrNotOnDuty` otherwise.
+    private(set) var isOnDuty = false
+
     func clearLivemapError() {
         livemapError = nil
     }
@@ -1247,6 +1378,9 @@ final class AppState {
     }
 
     private func applyLivemapStream(_ response: Services_Livemap_StreamResponse) {
+        if response.hasUserOnDuty {
+            isOnDuty = response.userOnDuty
+        }
         switch response.data {
         case .snapshot(let snapshot):
             livemapMarkers = snapshot.markers
@@ -1467,6 +1601,18 @@ final class AppState {
         return try await client.listCalendarEntries(year: year, month: month, calendarIds: calendarIds)
     }
 
+    /// Creates or updates a calendar entry in the given calendar.
+    func createOrUpdateCalendarEntry(_ entry: Resources_Calendar_Entries_CalendarEntry, userIds: [Int32] = []) async throws -> Resources_Calendar_Entries_CalendarEntry {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.createOrUpdateCalendarEntry(entry, userIds: userIds)
+    }
+
+    /// Deletes a calendar entry by id.
+    func deleteCalendarEntry(id: Int64) async throws {
+        guard let client else { throw FiveNetError.notConnected }
+        try await client.deleteCalendarEntry(id: id)
+    }
+
     // MARK: - Jobs (Berufe)
 
     /// Fetches the job message of the day (MOTD).
@@ -1517,10 +1663,22 @@ final class AppState {
         return try await client.getColleagueLabels(search: search)
     }
 
-    /// Creates/updates colleague labels (sends the full label list).
-    func manageLabels(_ labels: [Resources_Jobs_Labels_Label]) async throws -> [Resources_Jobs_Labels_Label] {
+    /// Creates/updates a single colleague label (v2026.8.1 RPC).
+    func createOrUpdateLabel(_ label: Resources_Jobs_Labels_Label) async throws -> Resources_Jobs_Labels_Label {
         guard let client else { throw FiveNetError.notConnected }
-        return try await client.manageLabels(labels)
+        return try await client.createOrUpdateLabel(label)
+    }
+
+    /// Deletes a colleague label by id.
+    func deleteLabel(id: Int64) async throws {
+        guard let client else { throw FiveNetError.notConnected }
+        try await client.deleteLabel(id: id)
+    }
+
+    /// Reorders colleague labels by id (send the full ordered list of ids).
+    func reorderLabels(_ labelIds: [Int64]) async throws {
+        guard let client else { throw FiveNetError.notConnected }
+        try await client.reorderLabels(labelIds)
     }
 
     /// Fetches label usage statistics (how many colleagues carry each label).
@@ -1548,9 +1706,9 @@ final class AppState {
     }
 
     /// Lists conduct register entries.
-    func listConductEntries(types: [Resources_Jobs_Conduct_ConductType] = [], userIds: [Int32] = [], showExpired: Bool? = nil, showDrafts: Bool? = nil, showDeleted: Bool? = nil, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListConductEntriesResponse {
+    func listConductEntries(types: [Resources_Jobs_Conduct_ConductType] = [], userIds: [Int32] = [], showExpired: Bool? = nil, showDrafts: Bool? = nil, showDeleted: Bool? = nil, ids: [Int64] = [], offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListConductEntriesResponse {
         guard let client else { throw FiveNetError.notConnected }
-        return try await client.listConductEntries(types: types, userIds: userIds, showExpired: showExpired, showDrafts: showDrafts, showDeleted: showDeleted, offset: offset, pageSize: pageSize)
+        return try await client.listConductEntries(types: types, userIds: userIds, showExpired: showExpired, showDrafts: showDrafts, showDeleted: showDeleted, ids: ids, offset: offset, pageSize: pageSize)
     }
 
     /// Fetches a single conduct register entry by id.
@@ -1720,12 +1878,6 @@ final class AppState {
     func listAccounts(username: String = "", offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Settings_ListAccountsResponse {
         guard let client else { throw FiveNetError.notConnected }
         return try await client.listAccounts(username: username, offset: offset, pageSize: pageSize)
-    }
-
-    /// Creates a new account and returns the registration token.
-    func createAccount(license: String, username: String) async throws -> String {
-        guard let client else { throw FiveNetError.notConnected }
-        return try await client.createAccount(license: license, username: username)
     }
 
     /// Enables/disables an account.

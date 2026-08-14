@@ -48,6 +48,7 @@ struct JobOverviewView: View {
             }
         }
         .cardListStyle()
+        .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
         .navigationTitle("Übersicht")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }

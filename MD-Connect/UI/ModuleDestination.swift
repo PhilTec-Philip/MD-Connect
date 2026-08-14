@@ -30,3 +30,33 @@ func moduleRootView(_ module: FiveNetModule) -> some View {
         SettingsView()
     }
 }
+
+/// Registriert die modulübergreifenden Detail-Ziele auf einem NavigationStack.
+/// Wird von der Übersicht UND der Quick-Ansicht angewandt, damit Details (z. B.
+/// Kollege aus einer Einheiten-Info) in beiden Stacks erreichbar sind.
+struct ModuleDestinations: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(for: CitizenRoute.self) { route in
+                CitizenDetailView(userID: route.userID)
+            }
+            .navigationDestination(for: UnitRoute.self) { route in
+                UnitDetailView(unitID: route.unitID)
+            }
+            .navigationDestination(for: ColleagueRoute.self) { route in
+                ColleagueDetailView(userID: route.userID)
+            }
+            .navigationDestination(for: ConductRoute.self) { route in
+                ConductEntryDetailView(entryID: route.entryID)
+            }
+            .navigationDestination(for: QualificationRoute.self) { route in
+                QualificationDetailView(qualificationID: route.qualificationID)
+            }
+    }
+}
+
+extension View {
+    func moduleDestinations() -> some View {
+        modifier(ModuleDestinations())
+    }
+}

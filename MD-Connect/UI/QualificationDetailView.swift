@@ -338,9 +338,9 @@ struct QualificationDetailView: View {
                         }
                     }
                     ForEach(qualification.access.users, id: \.id) { userAccess in
-                        HStack {
-                            if userAccess.hasUser {
-                                NavigationLink(value: ColleagueRoute(userID: userAccess.user.userID)) {
+                        if userAccess.hasUser {
+                            NavigationLink(value: ColleagueRoute(userID: userAccess.user.userID)) {
+                                HStack {
                                     VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                                         Text(userShortName(userAccess.user))
                                             .font(.subheadline)
@@ -348,11 +348,18 @@ struct QualificationDetailView: View {
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
+                                    Spacer()
+                                    if userAccess.required {
+                                        QualificationBadge("erforderlich")
+                                    }
                                 }
                             }
-                            Spacer()
-                            if userAccess.required {
-                                QualificationBadge("erforderlich")
+                        } else {
+                            HStack {
+                                Spacer()
+                                if userAccess.required {
+                                    QualificationBadge("erforderlich")
+                                }
                             }
                         }
                     }
@@ -374,13 +381,23 @@ struct QualificationDetailView: View {
             infoRow("Zusammenfassung", result.summary)
         }
         if result.hasCreator {
-            HStack {
-                Text("Erstellt von")
+            NavigationLink(value: ColleagueRoute(userID: result.creator.userID)) {
+                HStack(alignment: .top) {
+                    Text("Erstellt von")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(creatorTitle(result.creator))
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+        }
+        if result.hasCreator {
+            HStack(alignment: .top) {
+                Text("Erhalten von")
                     .foregroundStyle(.secondary)
                 Spacer()
-                NavigationLink(value: ColleagueRoute(userID: result.creator.userID)) {
-                    Text(userShortName(result.creator))
-                }
+                Text(creatorTitle(result.creator))
+                    .multilineTextAlignment(.trailing)
             }
         }
         if result.hasCreatedAt {
@@ -401,11 +418,11 @@ struct QualificationDetailView: View {
             infoRow("Genehmigt am", formatTimestamp(request.approvedAt))
         }
         if request.hasApprover {
-            HStack {
-                Text("Genehmigt von")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                NavigationLink(value: ColleagueRoute(userID: request.approver.userID)) {
+            NavigationLink(value: ColleagueRoute(userID: request.approver.userID)) {
+                HStack {
+                    Text("Genehmigt von")
+                        .foregroundStyle(.secondary)
+                    Spacer()
                     Text(userShortName(request.approver))
                 }
             }
@@ -426,14 +443,28 @@ struct QualificationDetailView: View {
 
     // MARK: - Label helpers
 
+    /// "Name" inkl. Rang (Berufs-Rang-Label) und Job, falls vorhanden.
+    private func creatorTitle(_ user: Resources_Users_Short_UserShort) -> String {
+        var parts = [userShortName(user)]
+        if user.hasJobGradeLabel, !user.jobGradeLabel.isEmpty {
+            parts.append(user.jobGradeLabel)
+        } else if user.hasJobLabel, !user.jobLabel.isEmpty {
+            parts.append(user.jobLabel)
+        }
+        return parts.joined(separator: " · ")
+    }
+
     private func jobLabel(_ job: Resources_Access_JobAccess) -> String {
+        var parts: [String] = []
         if job.hasJobLabel, !job.jobLabel.isEmpty {
-            return job.jobLabel
+            parts.append(job.jobLabel)
+        } else if !job.job.isEmpty {
+            parts.append(job.job)
         }
         if job.hasJobGradeLabel, !job.jobGradeLabel.isEmpty {
-            return job.jobGradeLabel
+            parts.append(job.jobGradeLabel)
         }
-        return job.job
+        return parts.isEmpty ? "Beruf \(job.job)" : parts.joined(separator: " - ")
     }
 
     private func accessLevelLabel(_ level: Int32) -> String {

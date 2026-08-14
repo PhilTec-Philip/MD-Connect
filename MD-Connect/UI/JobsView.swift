@@ -32,6 +32,8 @@ struct JobsView: View {
                     Label("Führungsregister", systemImage: "list.clipboard")
                 }
         }
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .pendingAlarmBell()
         .moduleNavTitle(.jobs)
         .navConnectionDot()

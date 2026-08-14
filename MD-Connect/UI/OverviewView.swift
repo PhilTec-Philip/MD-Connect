@@ -10,11 +10,25 @@ struct OverviewView: View {
         GridItem(.flexible(), spacing: Theme.Spacing.xl),
     ]
 
+    @State private var showGlobalSearch = false
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
-                    AppHeader()
+                    AppHeader {
+                        PendingAlarmBell()
+
+                        Button {
+                            showGlobalSearch = true
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(Theme.Palette.accent)
+                                .accessibilityLabel("Global suchen")
+                        }
+                        .buttonStyle(.plain)
+                    }
 
                     if let name = characterName {
                         profileHero(name: name, job: jobLine)
@@ -60,30 +74,20 @@ struct OverviewView: View {
             .navigationDestination(for: FiveNetModule.self) { module in
                 moduleRootView(module)
             }
-            .navigationDestination(for: CitizenRoute.self) { route in
-                CitizenDetailView(userID: route.userID)
-            }
-            .navigationDestination(for: UnitRoute.self) { route in
-                UnitDetailView(unitID: route.unitID)
-            }
-            .navigationDestination(for: ColleagueRoute.self) { route in
-                ColleagueDetailView(userID: route.userID)
-            }
-            .navigationDestination(for: ConductRoute.self) { route in
-                ConductEntryDetailView(entryID: route.entryID)
-            }
-            .navigationDestination(for: QualificationRoute.self) { route in
-                QualificationDetailView(qualificationID: route.qualificationID)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    PendingAlarmBell()
-                }
-            }
+            .moduleDestinations()
+        }
+        .sheet(isPresented: $showGlobalSearch) {
+            GlobalSearchView()
+                .environment(appState)
         }
         .fullScreenCover(item: alarmBinding) { alarm in
             DispatchAlarmView(alarm: alarm)
                 .environment(appState)
+        }
+        .task {
+            await appState.startCentrumStream()
+            await appState.startLivemapStream()
+            await appState.loadCentrum()
         }
     }
 
@@ -158,8 +162,28 @@ struct OverviewView: View {
                 .frame(width: 100, height: 100)
                 .offset(x: -30, y: 50)
         }
+        .overlay(alignment: .topTrailing) {
+            dutyBadge
+                .padding(Theme.Spacing.md)
+        }
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous))
         .shadow(color: Theme.Palette.accent.opacity(0.25), radius: 14, y: 6)
+    }
+
+    /// Anwesenheitsstatus (im Dienst / nicht im Dienst) oben rechts in der
+    /// Profilkarte. Basis: das `user_on_duty`-Signal des Livemap-Streams.
+    private var dutyBadge: some View {
+        HStack(spacing: Theme.Spacing.xs) {
+            Circle()
+                .fill(appState.isOnDuty ? Theme.Palette.success : Theme.Palette.warning)
+                .frame(width: 8, height: 8)
+            Text(appState.isOnDuty ? "Im Dienst" : "Nicht im Dienst")
+                .font(.caption.weight(.semibold))
+        }
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, Theme.Spacing.xs)
+        .background(.white.opacity(0.2), in: Capsule())
+        .foregroundStyle(.white)
     }
 
     private var skeletonGrid: some View {

@@ -57,7 +57,7 @@ struct UnitTileView: View {
                     .disabled(joinInProgress)
                 }
                 .padding(.top, 2)
-            } else {
+            } else if appState.isOnDuty {
                 Button {
                     Task { await performJoin(unit) }
                 } label: {
@@ -70,6 +70,17 @@ struct UnitTileView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(joinInProgress)
+                .padding(.top, 2)
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: "lock.fill")
+                    Text("Beitritt nur im Dienst")
+                }
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 5)
+                .background(Color.gray.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .padding(.top, 2)
             }
         }

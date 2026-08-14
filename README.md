@@ -8,6 +8,25 @@ Qualifikationen, Kalender, Mail und weitere Module.
 > **Hinweis:** MD-Connect ist **nicht Teil des FiveNet-Projekts** und wird vom FiveNet-Team
 > weder unterstützt noch gesponsert. Weitere Details siehe [Marken-Hinweis](#marke) und `NOTICE`.
 
+## Funktionen
+
+- **Übersicht** – Modul-Grid, Profil-Hero, Schnellzugriff; alternativ **Schnellansicht** („Effizienz-Layout“) mit Deiner Einheit, Deinem Einsatz, offenen Einsätzen & Modul-Tiles
+- **Bürger / Fahrzeuge** – durchsuchbare Datenbanken mit Pagination, WANTED-Badges, Detailansichten
+- **LiveMap** – Karte mit Einheiten-/Einsatz-Markern, Einsatz-Heatmap, „Meine Einheit“-Ansicht, Einheit beitreten/verlassen
+- **Leitstelle** – Einsätze erstellen/übernehmen, Einsatz-Zeitstrahl, Einheiten, Aktivität, Archiv, Duty-Unit
+- **Wiki** – Seiten mit Inhaltsverzeichnis, Pins, Live-Suche, Rich-Content (Tiptap/HTML)
+- **Dokumente** – Suche, Kategorien, Status-Segmente, Aktionen (Schließen/Genehmigen/Anfragen/Reminder/Löschen), Inhalt-Editor
+- **Berufe** – Übersicht, Kollegen mit Labels, Aktivität, Stempeluhr, Führungsregister, Urlaub
+- **Qualifikationen** – eigene & alle Qualifizierungen, Detail mit Inhalt/Tutor (Anfragen & Ergebnisse benoten)
+- **Kalender** – Monatsansicht mit Urlauben & FiveNet-Kalendern, Datums-Sprung, Termin erstellen
+- **Mail** – Posteingang/Archiv, Suche, Thread-Detail, Verfassen/Antworten
+- **Einstellungen** – Job-Props, Rollen & Berechtigungen, Audit-Log, Discord, Leitstelle, Gesetzbücher, Datenspeicher, Konten, Config, Cron
+- **Alarm** – roter Vollbild-Alarm bei Einsatz-Zuweisung + Verstärkung-Alarm
+- **Global Search** – modulübergreifende Suche (Bürger/Fahrzeuge/Einsätze/Dokumente/Wiki)
+- **Live-Alarmglocke**, offline-erkannte Verbindung, Karten-Design-System
+
+Alle Änderungen: siehe [CHANGELOG.md](CHANGELOG.md).
+
 ## Kompatibilität
 
 - Zielplattform: iOS 26.5+ (SwiftUI, pure Swift — keine Storyboards)
@@ -30,7 +49,6 @@ Neue Swift-Dateien werden automatisch eingebunden
 - `MD-Connect/Generated/Core/` – AppState, GRPC-Client, Fehlerübersetzung
 - `MD-Connect/Generated/Protobuf/` – generierte Swift-Protobuf-Bindungen
   (aus den FiveNet-Proto-Definitionen, via `Scripts/generate-protos.sh`)
-- `Protos/` – eingecheckte FiveNet-Proto-Definitionen
 
 ## License & Trademark
 

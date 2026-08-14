@@ -25,6 +25,16 @@ extension Color {
             blue: Double(value & 0xFF) / 255
         )
     }
+
+    /// The text color (white or black) that is readable on top of this color,
+    /// chosen by WCAG-style relative luminance.
+    var readableText: Color {
+        guard let components = UIColor(self).cgColor.components, components.count >= 3 else {
+            return .white
+        }
+        let luminance = 0.299 * components[0] + 0.587 * components[1] + 0.114 * components[2]
+        return luminance > 0.6 ? .black : .white
+    }
 }
 
 /// Kompaktes Capsule-ID-Badge (z.B. `CIT-<id>`, `DOC-<id>`, `QUAL-<id>`).
@@ -167,6 +177,16 @@ extension Resources_Centrum_Units_StatusUnit {
         }
     }
 
+    var icon: String {
+        switch self {
+        case .available: return "checkmark.circle.fill"
+        case .onBreak: return "cup.and.saucer.fill"
+        case .busy: return "exclamationmark.circle.fill"
+        case .unavailable: return "xmark.circle.fill"
+        default: return "circle.fill"
+        }
+    }
+
     var color: Color {
         switch self {
         case .available: return .green
@@ -301,6 +321,43 @@ func previousGradeLookup(for activity: [Resources_Jobs_Colleagues_Activity_Colle
         }
     }
     return lookup
+}
+
+/// Full-sentence headline for a colleague activity entry, so the result is
+/// obvious at a glance ("Max Mustermann wurde auf Rang 2 befördert") instead of
+/// the bare past-tense label ("Befördert").
+func colleagueActivityHeadline(
+    _ entry: Resources_Jobs_Colleagues_Activity_ColleagueActivity,
+    previousGrade: Int32? = nil
+) -> String {
+    let who = entry.hasTargetUser ? colleagueName(entry.targetUser) : colleagueName(entry.sourceUser)
+    switch entry.activityType {
+    case .hired:
+        return "\(who) wurde eingestellt"
+    case .fired:
+        return "\(who) wurde entlassen"
+    case .promoted, .demoted:
+        let verb = entry.activityType == .promoted ? "befördert" : "degradiert"
+        if case .gradeChange(let change)? = entry.data.data {
+            let toLabel = change.gradeLabel.isEmpty ? String(change.grade) : change.gradeLabel
+            var text = "\(who) wurde \(verb)"
+            if let from = previousGrade {
+                text += " von Rang \(from)"
+            }
+            return "\(text) auf \(toLabel)"
+        }
+        return "\(who) wurde \(verb)"
+    case .absenceDate:
+        return "\(who): Urlaub geändert"
+    case .note:
+        return "\(who): Notiz geändert"
+    case .labels:
+        return "\(who): Labels geändert"
+    case .name:
+        return "\(who): Name geändert"
+    case .unspecified, .UNRECOGNIZED:
+        return entry.activityType.title
+    }
 }
 
 /// Human-readable details of a colleague activity entry (rank change, absence

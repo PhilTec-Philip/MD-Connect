@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftProtobuf
 
 /// Citizens module: searchable list of citizens with page-based pagination.
 /// Searching triggers a live reload as the text changes.
@@ -134,11 +135,12 @@ struct CitizensListView: View {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let offset = target * Self.pageSize
         do {
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
             let response = try await appState.listCitizens(
                 search: query,
-                offset: target * Self.pageSize,
+                offset: offset,
                 pageSize: Self.pageSize
             )
             citizens = response.users

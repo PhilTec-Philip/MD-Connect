@@ -258,15 +258,16 @@ struct DocumentsListView: View {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let offset = target * Self.pageSize
         do {
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
             let parsed = Self.parseSearch(query)
             let categoryIDs: [Int64] = selectedCategoryID.map { [$0] } ?? []
             let response = try await appState.listDocuments(
                 search: parsed.search,
                 categoryIds: categoryIDs,
                 documentIds: parsed.documentIDs,
-                offset: target * Self.pageSize,
+                offset: offset,
                 pageSize: Self.pageSize
             )
             documents = response.documents

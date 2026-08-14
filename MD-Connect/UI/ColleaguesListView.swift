@@ -20,6 +20,7 @@ struct ColleaguesListView: View {
     @State private var hasLoaded = false
     @State private var searchTask: Task<Void, Never>?
     @State private var selectedColleagueID: Int32?
+    @State private var showLabels = false
 
     private var totalPages: Int64 {
         max(1, Int64(ceil(Double(totalCount) / Double(Self.pageSize))))
@@ -28,6 +29,31 @@ struct ColleaguesListView: View {
     var body: some View {
         Group {
             List {
+                Section {
+                    SectionCard {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                            HStack(spacing: Theme.Spacing.sm) {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundStyle(.secondary)
+                                TextField("Name suchen", text: $searchText)
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                                if !searchText.isEmpty {
+                                    Button {
+                                        searchText = ""
+                                        Task { await load(reset: true) }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                    .cardRow()
+                }
+
                 if let errorMessage {
                     Section {
                         StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -107,9 +133,7 @@ struct ColleaguesListView: View {
                 }
             }
             .cardListStyle()
-            .searchable(text: $searchText, prompt: "Name suchen")
-            .autocorrectionDisabled()
-            .textInputAutocapitalization(.never)
+            .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     NavigationLink {
@@ -168,31 +192,56 @@ struct ColleaguesListView: View {
     }
 
     private var labelFilterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Theme.Spacing.md) {
-                ForEach(labels) { label in
-                    Button {
-                        if selectedLabelIDs.contains(label.id) {
-                            selectedLabelIDs.remove(label.id)
-                        } else {
-                            selectedLabelIDs.insert(label.id)
-                        }
-                    } label: {
-                        Text(label.name)
-                            .font(.footnote.weight(.medium))
-                            .padding(.horizontal, Theme.Spacing.lg)
-                            .padding(.vertical, Theme.Spacing.sm)
-                            .background(Color(hex: label.color) ?? .secondary.opacity(0.15), in: Capsule())
-                            .foregroundStyle(foregroundForLabel(label))
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showLabels.toggle()
+                }
+            } label: {
+                HStack(spacing: Theme.Spacing.sm) {
+                    Text("Labels")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    if !selectedLabelIDs.isEmpty {
+                        Text("\(selectedLabelIDs.count) aktiv")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Theme.Palette.accent)
                     }
-                    .buttonStyle(.plain)
-                    .overlay(
-                        Capsule().strokeBorder(selectedLabelIDs.contains(label.id) ? Theme.Palette.accent : .clear, lineWidth: 2)
-                    )
+                    Spacer()
+                    Image(systemName: showLabels ? "chevron.down" : "chevron.up")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
                 }
             }
-            .padding(.horizontal)
+            .buttonStyle(.plain)
+
+            if showLabels {
+                FlowLayout(spacing: Theme.Spacing.sm) {
+                    ForEach(labels) { label in
+                        Button {
+                            if selectedLabelIDs.contains(label.id) {
+                                selectedLabelIDs.remove(label.id)
+                            } else {
+                                selectedLabelIDs.insert(label.id)
+                            }
+                        } label: {
+                            Text(label.name)
+                                .font(.footnote.weight(.medium))
+                                .padding(.horizontal, Theme.Spacing.lg)
+                                .padding(.vertical, Theme.Spacing.sm)
+                                .background(Color(hex: label.color) ?? .secondary.opacity(0.15), in: Capsule())
+                                .foregroundStyle(foregroundForLabel(label))
+                        }
+                        .buttonStyle(.plain)
+                        .overlay(
+                            Capsule().strokeBorder(selectedLabelIDs.contains(label.id) ? Theme.Palette.accent : .clear, lineWidth: 2)
+                        )
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
+        .padding(.horizontal)
         .padding(.vertical, Theme.Spacing.md)
         .background(.bar)
     }

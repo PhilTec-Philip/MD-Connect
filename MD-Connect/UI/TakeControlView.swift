@@ -149,6 +149,7 @@ struct TakeControlView: View {
             }
         }
         .cardListStyle()
+        .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
         .navigationTitle("Leitstelle")
         .navigationBarTitleDisplayMode(.inline)
     }

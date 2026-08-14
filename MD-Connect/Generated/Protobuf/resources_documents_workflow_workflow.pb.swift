@@ -15,8 +15,6 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
-//
-
 
 // DO NOT EDIT.
 // swift-format-ignore-file
@@ -141,6 +139,16 @@ nonisolated struct Resources_Documents_Workflow_WorkflowCronData: Sendable {
   // methods supported on all messages.
 
   var lastDocID: Int64 = 0
+
+  var processedRows: Int64 = 0
+
+  var remindersSent: Int64 = 0
+
+  var autoClosedRows: Int64 = 0
+
+  var deletedRows: Int64 = 0
+
+  var updatedRows: Int64 = 0
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -419,7 +427,7 @@ nonisolated extension Resources_Documents_Workflow_AutoCloseSettings: SwiftProto
 
 nonisolated extension Resources_Documents_Workflow_WorkflowCronData: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".WorkflowCronData"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}last_doc_id\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}last_doc_id\0\u{3}processed_rows\0\u{3}reminders_sent\0\u{3}auto_closed_rows\0\u{3}deleted_rows\0\u{3}updated_rows\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -428,6 +436,11 @@ nonisolated extension Resources_Documents_Workflow_WorkflowCronData: SwiftProtob
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularInt64Field(value: &self.lastDocID) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.processedRows) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.remindersSent) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.autoClosedRows) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.deletedRows) }()
+      case 6: try { try decoder.decodeSingularInt64Field(value: &self.updatedRows) }()
       default: break
       }
     }
@@ -437,11 +450,31 @@ nonisolated extension Resources_Documents_Workflow_WorkflowCronData: SwiftProtob
     if self.lastDocID != 0 {
       try visitor.visitSingularInt64Field(value: self.lastDocID, fieldNumber: 1)
     }
+    if self.processedRows != 0 {
+      try visitor.visitSingularInt64Field(value: self.processedRows, fieldNumber: 2)
+    }
+    if self.remindersSent != 0 {
+      try visitor.visitSingularInt64Field(value: self.remindersSent, fieldNumber: 3)
+    }
+    if self.autoClosedRows != 0 {
+      try visitor.visitSingularInt64Field(value: self.autoClosedRows, fieldNumber: 4)
+    }
+    if self.deletedRows != 0 {
+      try visitor.visitSingularInt64Field(value: self.deletedRows, fieldNumber: 5)
+    }
+    if self.updatedRows != 0 {
+      try visitor.visitSingularInt64Field(value: self.updatedRows, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: Resources_Documents_Workflow_WorkflowCronData, rhs: Resources_Documents_Workflow_WorkflowCronData) -> Bool {
     if lhs.lastDocID != rhs.lastDocID {return false}
+    if lhs.processedRows != rhs.processedRows {return false}
+    if lhs.remindersSent != rhs.remindersSent {return false}
+    if lhs.autoClosedRows != rhs.autoClosedRows {return false}
+    if lhs.deletedRows != rhs.deletedRows {return false}
+    if lhs.updatedRows != rhs.updatedRows {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

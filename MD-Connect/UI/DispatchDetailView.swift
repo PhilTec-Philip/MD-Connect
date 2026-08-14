@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftProtobuf
 
 /// Detailed view of a single dispatch with status actions and unit assignment.
 struct DispatchDetailView: View {
@@ -10,11 +11,16 @@ struct DispatchDetailView: View {
     @State private var activity: [Resources_Centrum_Dispatches_DispatchStatus] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
-    @State private var selectedStatus: Resources_Centrum_Dispatches_StatusDispatch = .unspecified
-    @State private var showStatusPicker = false
-    @State private var reason = ""
     @State private var isSaving = false
     @State private var stagedUnitIDs: Set<Int64> = []
+
+    /// Detail route for an assigned unit, opened from the dispatch itself.
+    /// A dedicated type (instead of a bare `Int64?`) avoids clashing with a
+    /// parent list's `.navigationDestination(item:)` for `Int64?`, which would
+    /// double-push the dispatch when the unit detail is opened.
+    struct DispatchUnitRoute: Hashable {
+        let unitID: Int64
+    }
 
     /// The currently-assigned unit ids of the loaded dispatch.
     private var currentUnitIDs: Set<Int64> {
@@ -51,8 +57,8 @@ struct DispatchDetailView: View {
         .task {
             await load()
         }
-        .sheet(isPresented: $showStatusPicker) {
-            statusSheet
+        .navigationDestination(for: DispatchUnitRoute.self) { route in
+            UnitDetailView(unitID: route.unitID)
         }
     }
 
@@ -63,12 +69,36 @@ struct DispatchDetailView: View {
                 icon: "megaphone.fill",
                 title: formatDispatchID(dispatch.id),
                 subtitle: dispatchMessageText(dispatch),
-                badges: dispatchBadges(dispatch)
+                badges: dispatchBadges(dispatch),
+                actions: {
+                    if appState.ownUnitID != nil {
+                        HeroStatusButtons(
+                            items: Self.heroStatusItems,
+                            isActive: { status in dispatch.status.status == status },
+                            action: { status in
+                                Task {
+                                    await appState.updateDispatchStatus(dispatch.id, status: status)
+                                    await load()
+                                }
+                            }
+                        )
+                    }
+                }
             ))
 
             Section("Details") {
                 row("Gesendet am", formatTimestamp(dispatch.createdAt))
-                row("Gesendet von", senderName(dispatch))
+                if !dispatch.anon, dispatch.hasCreator, dispatch.creator.userID > 0 {
+                    NavigationLink(value: CitizenRoute(userID: dispatch.creator.userID)) {
+                        HStack {
+                            Text("Gesendet von").foregroundStyle(.secondary)
+                            Spacer()
+                            Text(senderName(dispatch))
+                        }
+                    }
+                } else {
+                    row("Gesendet von", senderName(dispatch))
+                }
                 if !dispatch.jobs.jobs.isEmpty {
                     row("Zuständig", dispatch.jobs.jobs.map(\.label).joined(separator: ", "))
                 }
@@ -81,9 +111,10 @@ struct DispatchDetailView: View {
             if !dispatch.units.isEmpty {
                 Section("Zugewiesene Einheiten") {
                     ForEach(dispatch.units, id: \.unitID) { assignment in
-                        NavigationLink(value: UnitRoute(unitID: assignment.unitID)) {
+                        NavigationLink(value: DispatchUnitRoute(unitID: assignment.unitID)) {
                             UnitBubbleRow(unit: assignment.unit)
                         }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -100,28 +131,24 @@ struct DispatchDetailView: View {
                 }
             }
 
-            Section {
-                Button {
-                    showStatusPicker = true
-                } label: {
-                    Label("Status ändern", systemImage: "arrow.left.arrow.right")
-                }
+            if appState.isOnDuty {
+                Section {
+                    Button {
+                        Task { await take(.accepted) }
+                    } label: {
+                        Label("Übernehmen", systemImage: "checkmark.circle")
+                    }
+                    .disabled(isSaving)
 
-                Button {
-                    Task { await take(.accepted) }
-                } label: {
-                    Label("Übernehmen", systemImage: "checkmark.circle")
+                    Button(role: .destructive) {
+                        Task { await take(.declined) }
+                    } label: {
+                        Label("Ablehnen", systemImage: "xmark.circle")
+                    }
+                    .disabled(isSaving)
+                } footer: {
+                    Text("Übernehmen/Ablehnen beantwortet eine dir zugewiesene Einheit.")
                 }
-                .disabled(isSaving)
-
-                Button(role: .destructive) {
-                    Task { await take(.declined) }
-                } label: {
-                    Label("Ablehnen", systemImage: "xmark.circle")
-                }
-                .disabled(isSaving)
-            } footer: {
-                Text("Übernehmen/Ablehnen beantwortet eine dir zugewiesene Einheit.")
             }
 
             Section("Einheiten zuweisen") {
@@ -164,16 +191,17 @@ struct DispatchDetailView: View {
                 }
             }
 
-            Section("Aktivitäts-Feed") {
+            Section("Einsatz-Zeitstrahl") {
                 if activity.isEmpty {
                     Text("Keine Aktivität vorhanden.")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(activity, id: \.id) { entry in
-                        ActivityRow(
-                            icon: entry.feedIcon,
-                            title: entry.feedLabel,
-                            subtitle: activitySubtitle(entry)
+                    let entries = chronologicalActivity
+                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                        DispatchTimelineRow(
+                            entry: entry,
+                            isFirst: index == 0,
+                            isLast: index == entries.count - 1
                         )
                     }
                 }
@@ -222,50 +250,21 @@ struct DispatchDetailView: View {
         return parts.isEmpty ? "k.A." : parts.joined(separator: " · ")
     }
 
-    private func activitySubtitle(_ entry: Resources_Centrum_Dispatches_DispatchStatus) -> String {
-        var parts: [String] = []
-        let user = colleagueName(entry.user)
-        if !user.isEmpty { parts.append(user) }
-        if !entry.unit.name.isEmpty { parts.append(entry.unit.name) }
-        if entry.hasCode, !entry.code.isEmpty { parts.append("Code: \(entry.code)") }
-        if entry.hasReason, !entry.reason.isEmpty { parts.append(entry.reason) }
-        parts.append(formatRelative(entry.createdAt))
-        return parts.joined(separator: " · ")
-    }
-
-    private var statusSheet: some View {
-        NavigationStack {
-            Form {
-                Picker("Status", selection: $selectedStatus) {
-                    ForEach(Self.statusOptions, id: \.self) { status in
-                        Text(status.label).tag(status)
-                    }
-                }
-                TextField("Grund (optional)", text: $reason)
-            }
-            .navigationTitle("Status ändern")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen") { showStatusPicker = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Speichern") {
-                        Task {
-                            await appState.updateDispatchStatus(dispatchID, status: selectedStatus, reason: reason)
-                            showStatusPicker = false
-                            await load()
-                        }
-                    }
-                    .disabled(isSaving)
-                }
-            }
+    /// Activity entries in chronological order (oldest first) for the timeline.
+    private var chronologicalActivity: [Resources_Centrum_Dispatches_DispatchStatus] {
+        activity.sorted {
+            ($0.createdAt.timestamp.seconds, $0.createdAt.timestamp.nanos)
+                < ($1.createdAt.timestamp.seconds, $1.createdAt.timestamp.nanos)
         }
-        .presentationDetents([.medium])
     }
 
-    private static var statusOptions: [Resources_Centrum_Dispatches_StatusDispatch] {
-        [.new, .unassigned, .updated, .enRoute, .onScene, .needAssistance, .completed, .cancelled]
+private static var heroStatusItems: [HeroStatusButtons<Resources_Centrum_Dispatches_StatusDispatch>.Item] {
+        [
+            .init(status: .enRoute, label: "Auf dem Weg", icon: "arrow.right.circle.fill", color: .yellow),
+            .init(status: .onScene, label: "Vor Ort", icon: "location.circle.fill", color: .green),
+            .init(status: .needAssistance, label: "Verstärkung", icon: "exclamationmark.triangle.fill", color: .red),
+            .init(status: .completed, label: "Erledigt", icon: "checkmark.circle.fill", color: .blue),
+        ]
     }
 
     private func toggleUnit(_ unitID: Int64) {
@@ -399,6 +398,69 @@ private struct UnitTile: View {
 
     private var unitColor: Color {
         Color(hex: unit.color) ?? .accentColor
+    }
+}
+
+/// A single entry of the Einsatz-Zeitstrahl: a colored status dot on a vertical
+/// line, the status label with its timestamp and the acting user/unit plus any
+/// code and reason.
+private struct DispatchTimelineRow: View {
+    let entry: Resources_Centrum_Dispatches_DispatchStatus
+    let isFirst: Bool
+    let isLast: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Theme.Spacing.lg) {
+            VStack(spacing: 2) {
+                Rectangle()
+                    .fill(lineColor)
+                    .frame(width: 2)
+                    .frame(maxHeight: .infinity)
+                    .opacity(isFirst ? 0 : 1)
+                Circle()
+                    .fill(entry.status.color)
+                    .frame(width: 12, height: 12)
+                    .overlay(Circle().stroke(Theme.Palette.background, lineWidth: 2))
+                Rectangle()
+                    .fill(lineColor)
+                    .frame(width: 2)
+                    .frame(maxHeight: .infinity)
+                    .opacity(isLast ? 0 : 1)
+            }
+            .frame(width: 12)
+
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(entry.feedLabel)
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text(formatTimestamp(entry.createdAt))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let detail = detailLine {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.bottom, Theme.Spacing.lg)
+        }
+        .padding(.vertical, Theme.Spacing.xxs)
+    }
+
+    private var lineColor: Color {
+        entry.status.color.opacity(0.35)
+    }
+
+    private var detailLine: String? {
+        var parts: [String] = []
+        let user = colleagueName(entry.user)
+        if !user.isEmpty { parts.append(user) }
+        if !entry.unit.name.isEmpty { parts.append(entry.unit.name) }
+        if entry.hasCode, !entry.code.isEmpty { parts.append("Code: \(entry.code)") }
+        if entry.hasReason, !entry.reason.isEmpty { parts.append(entry.reason) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 

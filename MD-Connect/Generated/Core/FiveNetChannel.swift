@@ -280,8 +280,32 @@ actor FiveNetChannel {
             throw FiveNetError.timeout
         }
 
-        try await handshake.value
+        // Wait for the server's auth confirmation, but fail fast instead of
+        // hanging forever if the server never answers the handshake.
+        do {
+            try await authHandshake(withTimeout: 15, handshake: handshake)
+        } catch {
+            pendingAuth = nil
+            throw error
+        }
         isAuthenticated = true
+    }
+
+    /// Awaits the handshake result, cancelling via a timeout so a silent server
+    /// (or a lost websocket without a disconnect frame) cannot block the connect.
+    private func authHandshake(withTimeout seconds: TimeInterval, handshake: AuthHandshake) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask { try await handshake.value }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(seconds))
+                throw FiveNetError.timeout
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else {
+                throw FiveNetError.timeout
+            }
+            return first
+        }
     }
 
     private func makeControlAuthFrame(operation: String, token: String?) -> Resources_Grpcws_GrpcFrame {

@@ -9,20 +9,17 @@ struct DispatchListView: View {
         .unitAccepted, .unitDeclined, .enRoute, .onScene, .needAssistance,
     ]
 
-    @State private var selectedDispatchID: Int64?
-
     var body: some View {
         Group {
             List(appState.dispatches) { dispatch in
-                Button {
-                    selectedDispatchID = dispatch.id
-                } label: {
+                NavigationLink(value: CentrumRoute.dispatch(dispatch.id)) {
                     DispatchRow(dispatch: dispatch)
                 }
                 .buttonStyle(.plain)
                 .cardRow()
             }
             .cardListStyle()
+            .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
             .overlay {
                 if appState.dispatches.isEmpty {
                     EmptyStateView(
@@ -36,9 +33,6 @@ struct DispatchListView: View {
             .refreshable {
                 await appState.loadDispatches()
             }
-        }
-        .navigationDestination(item: $selectedDispatchID) { id in
-            DispatchDetailView(dispatchID: id)
         }
     }
 }
@@ -185,7 +179,7 @@ struct CreateDispatchSheet: View {
 }
 
 /// A single postal code entry from the server's static `data/postals.json`.
-private struct PostalLocation: Decodable, Sendable {
+struct PostalLocation: Decodable, Sendable {
     let x: Double
     let y: Double
     let code: String
@@ -193,7 +187,7 @@ private struct PostalLocation: Decodable, Sendable {
 
 /// Loads and caches the server's postal codes, mirroring the web's
 /// `$fetch('/data/postals.json')` behavior.
-private actor PostalLoader {
+actor PostalLoader {
     static let shared = PostalLoader()
 
     private var cache: [String: PostalLocation]?
@@ -261,7 +255,6 @@ private struct DispatchRow: View {
             .padding(.leading, Theme.Spacing.xl)
 
             Spacer(minLength: 0)
-            CardChevron()
         }
         .padding(Theme.Spacing.md)
         .padding(.trailing, Theme.Spacing.sm)

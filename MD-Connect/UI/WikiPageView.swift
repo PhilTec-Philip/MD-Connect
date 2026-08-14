@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftProtobuf
 
 /// Displays a single wiki page: its metadata, the page tree for navigation,
 /// and the rendered content.
@@ -145,10 +146,19 @@ struct WikiPageView: View {
         do {
             let loaded = try await appState.getWikiPage(id: pageID)
             page = loaded
+            if let data: Data = try? loaded.serializedBytes() {
+                ViewedContentCache.shared.store(data, for: "wiki-\(pageID)")
+            }
             let response = try await appState.listWikiPages(job: loaded.job, rootOnly: false, pageSize: 500)
             tree = response.pages
         } catch {
-            errorMessage = error.localizedDescription
+            if let cached = ViewedContentCache.shared.load(for: "wiki-\(pageID)"),
+               let cachedPage = try? Resources_Wiki_Page(serializedBytes: cached) {
+                page = cachedPage
+                errorMessage = "Offline-Inhalt\(cachedPage.hasMeta && cachedPage.meta.hasUpdatedAt ? " (Stand \(formatTimestamp(cachedPage.meta.updatedAt)))" : "")"
+            } else {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -262,7 +272,7 @@ private struct WikiTreeNodeView: View {
 }
 
 /// Simple horizontal wrapping layout for badge rows.
-private struct FlowLayout: Layout {
+private struct BadgeFlowLayout: Layout {
     var spacing: CGFloat = 6
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

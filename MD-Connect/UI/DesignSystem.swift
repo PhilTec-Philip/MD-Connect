@@ -443,6 +443,34 @@ struct CardChevron: View {
 }
 
 extension View {
+    /// Blinkt den View (opacity 1.0 ↔ 0.35) solange `enabled` wahr ist —
+    /// z.B. für den „Verstärkung“-Status-Button, wenn die eigene Einheit
+    /// Verstärkung angefordert hat (500 ms Takt).
+    func blinking(enabled: Bool, interval: TimeInterval = 0.5) -> some View {
+        modifier(BlinkingModifier(enabled: enabled, interval: interval))
+    }
+}
+
+/// Treibt die Blink-Animation über `TimelineView(.animation)` an; läuft nur
+/// solange `enabled` gesetzt ist.
+private struct BlinkingModifier: ViewModifier {
+    let enabled: Bool
+    let interval: TimeInterval
+
+    func body(content: Content) -> some View {
+        if enabled {
+            TimelineView(.animation(minimumInterval: interval, paused: false)) { timeline in
+                let on = Int(timeline.date.timeIntervalSinceReferenceDate / interval) % 2 == 0
+                content.opacity(on ? 1.0 : 0.35)
+            }
+            .animation(.linear(duration: interval * 0.8), value: enabled)
+        } else {
+            content.opacity(1.0)
+        }
+    }
+}
+
+extension View {
     /// Flache Liste auf App-Hintergrund — Basis für den Karten-Look.
     func cardListStyle() -> some View {
         listStyle(.plain)
@@ -609,26 +637,33 @@ struct HeroBadge: View {
 
 /// Hero-Kopf für Detail-Screens im Overview-Stil: Verlaufs-Hintergrund in der
 /// Modulfarbe, dekorative Circles, optionales Icon-Tile, Titel + Untertitel und
-/// Badge-Pills auf dem Verlauf.
-struct DetailHero: View {
+/// Badge-Pills auf dem Verlauf. Über `actions` kann rechts eine vertikale
+/// Spalte mit Schnellaktionen (z. B. Status-Buttons) eingebettet werden.
+struct DetailHero<Actions: View>: View {
     let gradient: [Color]
     var icon: String?
     var title: String
     var subtitle: String?
     var badges: [String] = []
+    let actions: Actions
 
-    init(gradient: [Color], icon: String? = nil, title: String, subtitle: String? = nil, badges: [String] = []) {
+    init(gradient: [Color], icon: String? = nil, title: String, subtitle: String? = nil, badges: [String] = [], @ViewBuilder actions: () -> Actions) {
         self.gradient = gradient
         self.icon = icon
         self.title = title
         self.subtitle = subtitle
         self.badges = badges
+        self.actions = actions()
+    }
+
+    init(gradient: [Color], icon: String? = nil, title: String, subtitle: String? = nil, badges: [String] = []) where Actions == EmptyView {
+        self.init(gradient: gradient, icon: icon, title: title, subtitle: subtitle, badges: badges) { EmptyView() }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
-            if let icon {
-                HStack {
+        HStack(alignment: .center, spacing: Theme.Spacing.xl) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xl) {
+                if let icon {
                     ZStack {
                         RoundedRectangle(cornerRadius: Theme.Radius.xl, style: .continuous)
                             .fill(.white.opacity(0.18))
@@ -637,29 +672,32 @@ struct DetailHero: View {
                             .foregroundStyle(.white)
                     }
                     .frame(width: 72, height: 72)
-                    Spacer()
                 }
-            }
 
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                Text(title)
-                    .font(Theme.Typography.title)
-                    .foregroundStyle(.white)
-                    .lineLimit(3)
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.92))
-                        .lineLimit(2)
-                }
-            }
-
-            if !badges.isEmpty {
-                HStack(spacing: Theme.Spacing.sm) {
-                    ForEach(badges, id: \.self) { badge in
-                        HeroBadge(badge)
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    Text(title)
+                        .font(Theme.Typography.title)
+                        .foregroundStyle(.white)
+                        .lineLimit(3)
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.92))
+                            .lineLimit(2)
                     }
                 }
+
+                if !badges.isEmpty {
+                    HStack(spacing: Theme.Spacing.sm) {
+                        ForEach(badges, id: \.self) { badge in
+                            HeroBadge(badge)
+                        }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            if !(actions is EmptyView) {
+                actions
             }
         }
         .padding(Theme.Spacing.xl)
@@ -685,9 +723,51 @@ struct DetailHero: View {
     }
 }
 
+/// Vertikale Status-Schnellaktionen für Detail-Heroes: je Status ein Button
+/// (aktiv = ausgefüllt mit Statusfarbe, inaktiv = heller weißer Hintergrund).
+struct HeroStatusButtons<Status: Hashable>: View {
+    struct Item: Identifiable {
+        let status: Status
+        let label: String
+        let icon: String
+        let color: Color
+
+        var id: Status { status }
+    }
+
+    let items: [Item]
+    let isActive: (Status) -> Bool
+    let action: (Status) -> Void
+
+    var body: some View {
+        VStack(spacing: Theme.Spacing.sm) {
+            ForEach(items) { item in
+                Button {
+                    action(item.status)
+                } label: {
+                    HStack(spacing: Theme.Spacing.xs) {
+                        Image(systemName: item.icon)
+                        Text(item.label)
+                    }
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Theme.Spacing.sm)
+                    .background(
+                        isActive(item.status) ? item.color : Color.white.opacity(0.18),
+                        in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(width: 120)
+    }
+}
+
 extension View {
     /// Fügt den Detail-Hero als erste List-Section ein (ohne List-Insets).
-    func detailHeroSection(_ hero: DetailHero) -> some View {
+    func detailHeroSection<Actions: View>(_ hero: DetailHero<Actions>) -> some View {
         Section {
             hero
                 .listRowInsets(EdgeInsets())

@@ -294,6 +294,17 @@ final class FiveNetClient: @unchecked Sendable {
         return response.dispatch
     }
 
+    /// Fetches the dispatch heatmap overlay (weighted dispatch hotspots).
+    func getDispatchHeatmap() async throws -> Services_Centrum_GetDispatchHeatmapResponse {
+        let request = Services_Centrum_GetDispatchHeatmapRequest()
+        return try await call(
+            service: "services.centrum.CentrumService",
+            method: "GetDispatchHeatmap",
+            requestData: try request.serializedData(),
+            responseType: Services_Centrum_GetDispatchHeatmapResponse.self
+        )
+    }
+
     /// Creates a new dispatch (einsatz) for the current character.
     func createDispatch(job: String, message: String, description: String = "", anon: Bool = false, x: Double = 0, y: Double = 0, postal: String = "") async throws -> Resources_Centrum_Dispatches_Dispatch {
         var request = Services_Centrum_CreateDispatchRequest()
@@ -959,7 +970,7 @@ final class FiveNetClient: @unchecked Sendable {
     func listColleagues(search: String = "", userIds: [Int32] = [], absent: Bool? = nil, labelIds: [Int64] = [], offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListColleaguesResponse {
         var request = Services_Jobs_ListColleaguesRequest()
         request.search = search
-        request.userIds = userIds
+        request.users.userIds = userIds
         if let absent {
             request.absent = absent
         }
@@ -1011,7 +1022,7 @@ final class FiveNetClient: @unchecked Sendable {
     /// full list. The server filters these down to the caller's permissions.
     func listColleagueActivity(userIds: [Int32] = [], activityTypes: [Resources_Jobs_Colleagues_Activity_ColleagueActivityType] = [], offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListColleagueActivityResponse {
         var request = Services_Jobs_ListColleagueActivityRequest()
-        request.userIds = userIds
+        request.users.userIds = userIds
         request.activityTypes = activityTypes.isEmpty ? Self.allActivityTypes : activityTypes
         request.pagination.offset = offset
         request.pagination.pageSize = pageSize
@@ -1061,17 +1072,42 @@ final class FiveNetClient: @unchecked Sendable {
         return response.labels
     }
 
-    /// Creates/updates colleague labels (sends the full label list).
-    func manageLabels(_ labels: [Resources_Jobs_Labels_Label]) async throws -> [Resources_Jobs_Labels_Label] {
-        var request = Services_Jobs_ManageLabelsRequest()
-        request.labels = labels
-        let response: Services_Jobs_ManageLabelsResponse = try await call(
+    /// Creates or updates a single colleague label (v2026.8.1 replaced the
+    /// bulk `ManageLabels` RPC with per-label CreateOrUpdate/Delete/Reorder).
+    func createOrUpdateLabel(_ label: Resources_Jobs_Labels_Label) async throws -> Resources_Jobs_Labels_Label {
+        var request = Services_Jobs_CreateOrUpdateLabelRequest()
+        request.label = label
+        let response: Services_Jobs_CreateOrUpdateLabelResponse = try await call(
             service: "services.jobs.ColleaguesService",
-            method: "ManageLabels",
+            method: "CreateOrUpdateLabel",
             requestData: try request.serializedData(),
-            responseType: Services_Jobs_ManageLabelsResponse.self
+            responseType: Services_Jobs_CreateOrUpdateLabelResponse.self
         )
-        return response.labels
+        return response.label
+    }
+
+    /// Deletes a colleague label by id.
+    func deleteLabel(id: Int64) async throws {
+        var request = Services_Jobs_DeleteLabelRequest()
+        request.id = id
+        _ = try await call(
+            service: "services.jobs.ColleaguesService",
+            method: "DeleteLabel",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_DeleteLabelResponse.self
+        )
+    }
+
+    /// Reorders colleague labels by id (send the full ordered list of ids).
+    func reorderLabels(_ labelIds: [Int64]) async throws {
+        var request = Services_Jobs_ReorderLabelsRequest()
+        request.labelIds = labelIds
+        _ = try await call(
+            service: "services.jobs.ColleaguesService",
+            method: "ReorderLabels",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_ReorderLabelsResponse.self
+        )
     }
 
     /// Fetches label usage statistics (how many colleagues carry each label).
@@ -1093,7 +1129,7 @@ final class FiveNetClient: @unchecked Sendable {
         request.userMode = userMode
         request.mode = mode
         request.perDay = perDay
-        request.userIds = userIds
+        request.users.userIds = userIds
         if let start {
             request.date.start = toTimestampProto(start)
         }
@@ -1114,7 +1150,7 @@ final class FiveNetClient: @unchecked Sendable {
     func getTimeclockStats(userID: Int32? = nil) async throws -> Services_Jobs_GetTimeclockStatsResponse {
         var request = Services_Jobs_GetTimeclockStatsRequest()
         if let userID {
-            request.userID = userID
+            request.users.userIds = [userID]
         }
         return try await call(
             service: "services.jobs.TimeclockService",
@@ -1139,10 +1175,11 @@ final class FiveNetClient: @unchecked Sendable {
     }
 
     /// Lists conduct register entries.
-    func listConductEntries(types: [Resources_Jobs_Conduct_ConductType] = [], userIds: [Int32] = [], showExpired: Bool? = nil, showDrafts: Bool? = nil, showDeleted: Bool? = nil, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListConductEntriesResponse {
+    func listConductEntries(types: [Resources_Jobs_Conduct_ConductType] = [], userIds: [Int32] = [], showExpired: Bool? = nil, showDrafts: Bool? = nil, showDeleted: Bool? = nil, ids: [Int64] = [], offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListConductEntriesResponse {
         var request = Services_Jobs_ListConductEntriesRequest()
         request.types = types
-        request.userIds = userIds
+        request.users.userIds = userIds
+        request.ids = ids
         if let showExpired {
             request.showExpired = showExpired
         }
@@ -1491,20 +1528,6 @@ final class FiveNetClient: @unchecked Sendable {
         )
     }
 
-    /// Creates a new account with the given license + username.
-    func createAccount(license: String, username: String) async throws -> String {
-        var request = Services_Settings_CreateAccountRequest()
-        request.license = license
-        request.username = username
-        let response: Services_Settings_CreateAccountResponse = try await call(
-            service: "services.settings.AccountsService",
-            method: "CreateAccount",
-            requestData: try request.serializedData(),
-            responseType: Services_Settings_CreateAccountResponse.self
-        )
-        return response.regToken
-    }
-
     /// Enables/disables an account.
     func updateAccount(id: Int64, enabled: Bool) async throws -> Resources_Accounts_Account {
         var request = Services_Settings_UpdateAccountRequest()
@@ -1726,6 +1749,32 @@ final class FiveNetClient: @unchecked Sendable {
             responseType: Services_Calendar_ListCalendarEntriesResponse.self
         )
         return response.entries
+    }
+
+    /// Creates or updates a calendar entry in the given calendar.
+    func createOrUpdateCalendarEntry(_ entry: Resources_Calendar_Entries_CalendarEntry, userIds: [Int32] = []) async throws -> Resources_Calendar_Entries_CalendarEntry {
+        var request = Services_Calendar_CreateOrUpdateCalendarEntryRequest()
+        request.entry = entry
+        request.userIds = userIds
+        let response: Services_Calendar_CreateOrUpdateCalendarEntryResponse = try await call(
+            service: "services.calendar.EntriesService",
+            method: "CreateOrUpdateCalendarEntry",
+            requestData: try request.serializedData(),
+            responseType: Services_Calendar_CreateOrUpdateCalendarEntryResponse.self
+        )
+        return response.entry
+    }
+
+    /// Deletes a calendar entry by id.
+    func deleteCalendarEntry(id: Int64) async throws {
+        var request = Services_Calendar_DeleteCalendarEntryRequest()
+        request.entryID = id
+        _ = try await call(
+            service: "services.calendar.EntriesService",
+            method: "DeleteCalendarEntry",
+            requestData: try request.serializedData(),
+            responseType: Services_Calendar_DeleteCalendarEntryResponse.self
+        )
     }
 
     // MARK: - Mail (Mailer)

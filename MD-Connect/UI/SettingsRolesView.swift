@@ -192,6 +192,20 @@ struct SettingsCreateRoleSheet: View {
 
     var onCreated: () -> Void
 
+    /// Eigener Beruf des Charakters — der Server (`CreateRole`) verlangt von
+    /// Nicht-JobAdmins zwingend `job == eigener Job` und `grade <= eigener
+    /// jobGrade`, sonst `ErrInvalidRequest` (Web sendet `activeChar.job`).
+    private var ownJob: String {
+        appState.character?.job ?? ""
+    }
+
+    /// Als JobAdmin/Superuser dürfen beliebige Berufe + Ränge angelegt werden,
+    /// sonst nur der eigene Beruf bis zum eigenen Rang (Server-Prüfung).
+    private var maxGrade: Int32 {
+        if appState.isSuperuser { return 30 }
+        return max(0, Int32(appState.character?.jobGrade ?? 0))
+    }
+
     @State private var job = ""
     @State private var grade: Int32 = 0
     @State private var isSaving = false
@@ -201,10 +215,23 @@ struct SettingsCreateRoleSheet: View {
         NavigationStack {
             Form {
                 Section("Rolle") {
-                    TextField("Beruf (Job-Code)", text: $job)
-                        .autocorrectionDisabled()
-                        .autocapitalization(.none)
-                    Stepper("Rang: \(grade)", value: $grade, in: 0...30)
+                    if appState.isSuperuser {
+                        TextField("Beruf (Job-Code)", text: $job)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    } else {
+                        LabeledContent("Beruf", value: job.isEmpty ? "Kein Beruf" : job)
+                            .foregroundStyle(.secondary)
+                        Text("Du kannst nur Rollen für deinen eigenen Beruf anlegen.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Stepper("Rang: \(grade)", value: $grade, in: 0...maxGrade)
+                    if !appState.isSuperuser {
+                        Text("Du kannst Ränge bis zu deinem eigenen Rang (\(maxGrade)) vergeben.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 if let errorMessage {
@@ -228,7 +255,7 @@ struct SettingsCreateRoleSheet: View {
             }
             .onAppear {
                 if job.isEmpty {
-                    job = appState.character?.job ?? ""
+                    job = ownJob
                 }
             }
         }

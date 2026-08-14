@@ -416,6 +416,7 @@ private struct QualificationsListView: View {
     @State private var hasLoaded = false
     @State private var searchTask: Task<Void, Never>?
     @State private var selectedQualificationID: Int64?
+    @State private var isSearchPresented = false
 
     private var totalPages: Int64 {
         max(1, Int64(ceil(Double(totalCount) / Double(Self.pageSize))))
@@ -458,7 +459,7 @@ private struct QualificationsListView: View {
                         Button {
                             selectedQualificationID = qualification.id
                         } label: {
-                            QualificationRow(qualification: qualification)
+                            QualificationRow(qualification: qualification, characterJob: appState.character?.job)
                         }
                         .buttonStyle(.plain)
                         .cardRow()
@@ -500,7 +501,7 @@ private struct QualificationsListView: View {
                 }
             }
             .cardListStyle()
-            .searchable(text: $searchText, prompt: "Qualifikation suchen")
+            .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Qualifikation suchen")
             .autocorrectionDisabled()
             .onChange(of: searchText) {
                 searchTask?.cancel()
@@ -549,6 +550,7 @@ private struct QualificationsListView: View {
             )
             qualifications = response.qualifications
             totalCount = response.pagination.totalCount
+            isSearchPresented = totalCount > 0 || !searchText.isEmpty
         } catch {
             errorMessage = error.localizedDescription
             currentPage = previous
@@ -560,6 +562,7 @@ private struct QualificationsListView: View {
 /// Entwurf/Öffentlich/Ergebnis-Badges (Web `ListEntry.vue`).
 private struct QualificationRow: View {
     let qualification: Resources_Qualifications_Qualification
+    var characterJob: String?
 
     var body: some View {
         HStack(alignment: .center, spacing: Theme.Spacing.lg) {
@@ -590,6 +593,9 @@ private struct QualificationRow: View {
                     if qualification.hasResult, qualification.result.status != .unspecified {
                         ResultStatusBadge(status: qualification.result.status)
                     }
+                    if let access = ownAccessLevel {
+                        Badge(access, systemImage: "lock")
+                    }
                     if qualification.hasCreatedAt {
                         Text("Erstellt am \(formatTimestamp(qualification.createdAt))")
                             .font(.caption2)
@@ -611,6 +617,28 @@ private struct QualificationRow: View {
             in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
         )
         .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+    }
+
+    /// Zugriffs-Level des eigenen Charakters (über dessen Beruf) auf diese
+    /// Qualifikation — "Prüfung ablegen", "Benoten" etc. — als kleines Badge.
+    private var ownAccessLevel: String? {
+        guard let characterJob, !characterJob.isEmpty else { return nil }
+        let job = qualification.access.jobs.first { $0.job == characterJob }
+        guard let job else { return nil }
+        return "Zugriff: \(accessLevel(job.access))"
+    }
+
+    private func accessLevel(_ level: Int32) -> String {
+        switch level {
+        case 0: return "Nicht festgelegt"
+        case 1: return "Blockiert"
+        case 2: return "Ansehen"
+        case 3: return "Anfragen"
+        case 4: return "Prüfung ablegen"
+        case 5: return "Benoten"
+        case 6: return "Bearbeiten"
+        default: return "Stufe \(level)"
+        }
     }
 
     private var title: String {

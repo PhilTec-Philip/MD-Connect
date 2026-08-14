@@ -26,14 +26,26 @@ struct QuickView: View {
         .unitAccepted, .unitDeclined, .enRoute, .onScene, .needAssistance,
     ]
 
-    @State private var route: QuickRoute?
     @State private var showCreateDispatchSheet = false
+    @State private var showGlobalSearch = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
                     AppHeader {
+                        PendingAlarmBell()
+
+                        Button {
+                            showGlobalSearch = true
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(Theme.Palette.accent)
+                                .accessibilityLabel("Global suchen")
+                        }
+                        .buttonStyle(.plain)
+
                         Button {
                             showCreateDispatchSheet = true
                         } label: {
@@ -44,9 +56,7 @@ struct QuickView: View {
                         }
                         .buttonStyle(.plain)
 
-                        Button {
-                            route = .archive
-                        } label: {
+                        NavigationLink(value: QuickRoute.archive) {
                             Image(systemName: "archivebox")
                                 .font(.title3.weight(.semibold))
                                 .foregroundStyle(Theme.Palette.accent)
@@ -63,7 +73,7 @@ struct QuickView: View {
                 .padding(Theme.Spacing.xl)
             }
             .background(Theme.Palette.background.ignoresSafeArea())
-            .navigationDestination(item: $route) { route in
+            .navigationDestination(for: QuickRoute.self) { route in
                 switch route {
                 case .module(let module):
                     moduleRootView(module)
@@ -79,18 +89,19 @@ struct QuickView: View {
                     QuickUnitsView()
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    PendingAlarmBell()
-                }
-            }
+            .moduleDestinations()
             .sheet(isPresented: $showCreateDispatchSheet) {
                 CreateDispatchSheet()
                     .environment(appState)
             }
+            .sheet(isPresented: $showGlobalSearch) {
+                GlobalSearchView()
+                    .environment(appState)
+            }
             .task {
-                await appState.loadCentrum()
                 await appState.startCentrumStream()
+                await appState.startLivemapStream()
+                await appState.loadCentrum()
             }
             .refreshable {
                 await appState.loadCentrum()
@@ -124,9 +135,7 @@ struct QuickView: View {
                         Text("Du bist keiner Einheit zugewiesen.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Button {
-                            route = .units
-                        } label: {
+                        NavigationLink(value: QuickRoute.units) {
                             Label("Einheiten ansehen & beitreten", systemImage: "person.2.badge.plus")
                                 .font(.subheadline.weight(.semibold))
                                 .frame(maxWidth: .infinity)
@@ -144,9 +153,7 @@ struct QuickView: View {
     }
 
     private func unitCard(_ unit: Resources_Centrum_Units_Unit) -> some View {
-        Button {
-            route = .unit(unit.id)
-        } label: {
+        NavigationLink(value: QuickRoute.unit(unit.id)) {
             HStack(spacing: Theme.Spacing.lg) {
                 ZStack {
                     Circle()
@@ -187,15 +194,17 @@ struct QuickView: View {
                 Text("Einheiten-Status setzen")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                HStack(spacing: Theme.Spacing.sm) {
+                HStack(spacing: Theme.Spacing.xs) {
                     ForEach(Self.unitStatusOptions, id: \.self) { status in
                         let isActive = unit.status.status == status
                         Button {
                             Task { await appState.updateUnitStatus(unit.id, status: status) }
                         } label: {
-                            Text(status.label)
+                            Label(status.label, systemImage: status.icon)
                                 .font(.caption.bold())
-                                .foregroundStyle(isActive ? .white : status.color)
+                                .foregroundStyle(isActive ? status.color.readableText : status.color)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, Theme.Spacing.sm)
                                 .background(
@@ -282,9 +291,7 @@ struct QuickView: View {
                     dispatchCard(dispatch, own: false)
                 }
                 if openDispatches.count > Self.maxOpenShown {
-                    Button {
-                        route = .dispatches
-                    } label: {
+                    NavigationLink(value: QuickRoute.dispatches) {
                         Label("Alle \(openDispatches.count) Einsätze anzeigen", systemImage: "list.bullet")
                             .font(.subheadline.weight(.semibold))
                             .frame(maxWidth: .infinity)
@@ -301,21 +308,25 @@ struct QuickView: View {
     }
 
     private var openDispatches: [Resources_Centrum_Dispatches_Dispatch] {
-        appState.dispatches.filter { dispatch in
+        let ownUnitID = appState.ownUnitID
+        return appState.dispatches.filter { dispatch in
             Self.shownStatuses.contains(dispatch.status.status)
                 && !Self.closedStatuses.contains(dispatch.status.status)
+                && !(ownUnitID != nil && dispatch.units.contains { $0.unitID == ownUnitID })
         }
     }
 
     private static let maxOpenShown = 6
 
+    /// Reserved height for the status action row overlaying the bottom of the
+    /// card (keeps the layout stable for the character's own dispatches).
+    private static let statusRowHeight: CGFloat = 52
+
     // MARK: - Dispatch-Karte
 
     private func dispatchCard(_ dispatch: Resources_Centrum_Dispatches_Dispatch, own: Bool) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            Button {
-                route = .dispatch(dispatch.id)
-            } label: {
+        NavigationLink(value: QuickRoute.dispatch(dispatch.id)) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
                 HStack(spacing: Theme.Spacing.lg) {
                     RoundedRectangle(cornerRadius: 2.5)
                         .fill(dispatch.status.status.color)
@@ -355,11 +366,26 @@ struct QuickView: View {
                     Spacer(minLength: 0)
                     CardChevron()
                 }
-            }
-            .buttonStyle(.plain)
 
+                // The status actions overlay the bottom of the card, so reserve
+                // their height to keep the layout stable.
+                if own {
+                    Color.clear.frame(height: Self.statusRowHeight)
+                }
+            }
+            .padding(Theme.Spacing.xl)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            Theme.Palette.surface,
+            in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
+        )
+        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        .overlay(alignment: .bottomLeading) {
             if own {
-                HStack(spacing: Theme.Spacing.sm) {
+                HStack(spacing: Theme.Spacing.xs) {
                     ForEach(Self.dispatchStatusOptions) { option in
                         let isActive = dispatch.status.status == option.status
                         Button {
@@ -367,7 +393,9 @@ struct QuickView: View {
                         } label: {
                             Label(option.title, systemImage: option.icon)
                                 .font(.caption.bold())
-                                .foregroundStyle(isActive ? .white : option.tint)
+                                .foregroundStyle(isActive ? option.tint.readableText : option.tint)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, Theme.Spacing.sm)
                                 .background(
@@ -376,16 +404,13 @@ struct QuickView: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .blinking(enabled: isActive && option.status == .needAssistance)
                     }
                 }
+                .padding(.horizontal, Theme.Spacing.xl)
+                .padding(.bottom, Theme.Spacing.xl)
             }
         }
-        .padding(Theme.Spacing.xl)
-        .background(
-            Theme.Palette.surface,
-            in: RoundedRectangle(cornerRadius: Theme.Radius.lg, style: .continuous)
-        )
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
     }
 
     private struct DispatchStatusOption: Identifiable {
@@ -416,9 +441,7 @@ struct QuickView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Theme.Spacing.lg) {
                     ForEach(appState.accessibleModules) { module in
-                        Button {
-                            route = .module(module)
-                        } label: {
+                        NavigationLink(value: QuickRoute.module(module)) {
                             QuickAccessTile(module, width: 120, showsBackground: true)
                         }
                         .buttonStyle(.plain)
