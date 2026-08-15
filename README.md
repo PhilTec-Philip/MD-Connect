@@ -58,5 +58,6 @@ Licenses of used libraries, code and media can be found in the [`public/licenses
 
 ## Acknowledgements
 
+- [@PhilTec-Philip](https://github.com/PhilTec-Philip) for creating and developing the community project.
 - The FiveNet team and Alexander Trost for the excellent open-source system that made this app possible.
 - Apple and the Swift Protobuf authors for the Protobuf runtime and clients.
