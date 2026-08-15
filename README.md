@@ -1,9 +1,9 @@
-# MD-Connect
+# FiveNet Mobile
 
-MD-Connect is an iPadOS client built with SwiftUI for **FiveNet** roleplay servers.
+FiveNet Mobile is an iPadOS client built with SwiftUI for **FiveNet** roleplay servers.
 The app connects to FiveNet instances over gRPC-Web and provides access to the citizen and vehicle database, LiveMap, dispatch center, wiki, documents, jobs, qualifications, calendar, mail, and other modules.
 
-> **Notice:** MD-Connect is a **community project** in the `fivenet-app` organization and is **not directly supported by the FiveNet team**. See [Brand Notice](#brand-notice) and `NOTICE` for details.
+> **Notice:** FiveNet Mobile is a **community project** in the `fivenet-app` organization and is **not directly supported by the FiveNet team**. See [Brand Notice](#brand-notice) and `NOTICE` for details.
 
 ## Features
 
@@ -22,8 +22,6 @@ The app connects to FiveNet instances over gRPC-Web and provides access to the c
 - **Global Search** - cross-module search across citizens, vehicles, incidents, documents, and wiki
 - **Live alarm bell**, offline-aware connectivity, map design system
 
-See [CHANGELOG.md](CHANGELOG.md) for all changes.
-
 ## Compatibility
 
 - Target platform: iOS 26.5+ (SwiftUI, pure Swift, no storyboards)
@@ -32,23 +30,23 @@ See [CHANGELOG.md](CHANGELOG.md) for all changes.
 ## Build
 
 ```sh
-xcodebuild -project "MD-Connect.xcodeproj" -scheme "MD-Connect" \
+xcodebuild -project "FiveNetMobile.xcodeproj" -scheme "FiveNet Mobile" \
   -destination "generic/platform=iOS Simulator" -derivedDataPath /tmp/dd build
 ```
 
 New Swift files are picked up automatically
-(`PBXFileSystemSynchronizedRootGroup`, Xcode 16) - just place them under `MD-Connect/UI/`.
+(`PBXFileSystemSynchronizedRootGroup`, Xcode 16) - just place them under `FiveNet Mobile/UI/`.
 
 ## Project Structure
 
-- `MD-Connect/UI/` - SwiftUI views
-- `MD-Connect/Generated/Core/` - AppState, gRPC client, error translation
-- `MD-Connect/Generated/Protobuf/` - generated Swift Protobuf bindings
+- `FiveNet Mobile/UI/` - SwiftUI views
+- `FiveNet Mobile/Generated/Core/` - AppState, gRPC client, error translation
+- `FiveNet Mobile/Generated/Protobuf/` - generated Swift Protobuf bindings
   (from the FiveNet proto definitions via `Scripts/generate-protos.sh`)
 
 ## Brand Notice
 
-- MD-Connect is a community project in the `fivenet-app` organization.
+- FiveNet Mobile is a community project in the `fivenet-app` organization.
 - It is not an official FiveNet product and is not directly supported by the FiveNet team.
 - The name "FiveNet" is used only descriptively to indicate compatibility and functionality.
 
