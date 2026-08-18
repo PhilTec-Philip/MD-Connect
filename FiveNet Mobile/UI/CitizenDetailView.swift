@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftProtobuf
 
 /// Citizens module: full profile of a single citizen with an activity tab.
 struct CitizenDetailView: View {
@@ -9,20 +10,43 @@ struct CitizenDetailView: View {
     @State private var user: Resources_Users_User?
     @State private var activity: [Resources_Users_Activity_UserActivity] = []
     @State private var documents: [Resources_Documents_Relations_DocumentRelation] = []
+    @State private var checkVehicles: [Resources_Vehicles_Vehicle] = []
     @State private var isLoading = false
     @State private var isLoadingActivity = false
     @State private var isLoadingDocuments = false
+    @State private var isLoadingVehicles = false
     @State private var errorMessage: String?
     @State private var activityError: String?
     @State private var documentsError: String?
+    @State private var vehiclesError: String?
     @State private var copiedToClipboard = false
+    @State private var selectedTab: CitizenTab = .profile
 
     private let identifierFormat = CitizenIDFormat()
+
+    private enum CitizenTab: String, CaseIterable, Identifiable {
+        case profile = "Profil"
+        case check = "Einstellungsprüfung"
+
+        var id: String { rawValue }
+    }
 
     var body: some View {
         Group {
             if let user {
-                content(user)
+                VStack(spacing: 0) {
+                    PillTabBar(tabs: CitizenTab.allCases, selection: $selectedTab) { $0.rawValue }
+                        .padding(.top, Theme.Spacing.lg)
+                        .padding(.bottom, Theme.Spacing.sm)
+
+                    switch selectedTab {
+                    case .profile:
+                        profileContent(user)
+                    case .check:
+                        checkContent(user)
+                    }
+                }
+                .background(Theme.Palette.background.ignoresSafeArea())
             } else if let errorMessage {
                 EmptyStateView(
                     "exclamationmark.triangle",
@@ -61,10 +85,28 @@ struct CitizenDetailView: View {
             await load()
             await loadActivity()
             await loadDocuments()
+            await loadCheckVehicles()
         }
     }
 
-    private func content(_ user: Resources_Users_User) -> some View {
+    /// Einstellungsprüfung ist über die Systemeinstellungen (Settings.bundle)
+    /// konfigurierbar: Toggle `fivenetHiringCheckEnabled` + Haft-Rückblick
+    /// `fivenetHiringCheckDays`.
+    private var isHiringCheckEnabled: Bool {
+        if UserDefaults.standard.object(forKey: "fivenetHiringCheckEnabled") != nil {
+            return UserDefaults.standard.bool(forKey: "fivenetHiringCheckEnabled")
+        }
+        return true
+    }
+
+    private var hiringCheckDays: Int {
+        if UserDefaults.standard.object(forKey: "fivenetHiringCheckDays") != nil {
+            return max(1, min(UserDefaults.standard.integer(forKey: "fivenetHiringCheckDays"), 180))
+        }
+        return 30
+    }
+
+    private func profileContent(_ user: Resources_Users_User) -> some View {
         List {
             detailHeroSection(DetailHero(
                 gradient: FiveNetModule.citizens.gradient,
@@ -186,6 +228,212 @@ struct CitizenDetailView: View {
         .listStyle(.insetGrouped)
     }
 
+    /// Einstellungsprüfung: gebündelte Polizei-Relevanz eines Bürgers
+    /// (Einstellbar-Status, Fahndung inkl. Fahrzeug-Fahndung, Strafen,
+    /// Punkte, Haft-Verlauf, verknüpfte Dokumente).
+    private func checkContent(_ user: Resources_Users_User) -> some View {
+        Group {
+            if !isHiringCheckEnabled {
+                EmptyStateView(
+                    "person.text.rectangle",
+                    color: Theme.Palette.accent,
+                    title: "Einstellungsprüfung deaktiviert",
+                    message: "Aktiviere die Einstellungsprüfung in den Systemeinstellungen, um alle Daten gebündelt zu sehen."
+                )
+            } else {
+                List {
+                    Section("Ergebnis") {
+                        HStack(spacing: Theme.Spacing.sm) {
+                            Image(systemName: jailHistory.isEmpty ? "checkmark.seal.fill" : "xmark.octagon.fill")
+                                .foregroundStyle(jailHistory.isEmpty ? Theme.Palette.success : Theme.Palette.danger)
+                            Text(jailHistory.isEmpty ? "Einstellbar" : "Nicht einstellbar")
+                                .font(.headline)
+                                .foregroundStyle(jailHistory.isEmpty ? Theme.Palette.success : Theme.Palette.danger)
+                            Spacer()
+                        }
+                        .padding(.vertical, Theme.Spacing.xxs)
+                        Text(jailHistory.isEmpty
+                            ? "Keine Haft im Zeitraum der letzten \(hiringCheckDays) Tage."
+                            : "Der Bürger wurde in den letzten \(hiringCheckDays) Tagen inhaftiert (\(jailHistory.count) Haft-Eintrag\(jailHistory.count == 1 ? "" : "e")).")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Section("Fahndung") {
+                        labeledRow("Person gefahndet", user.props.wanted ? "GESUCHT" : "Nicht gesucht", valueColor: user.props.wanted ? Theme.Palette.danger : Theme.Palette.success)
+                        if user.props.hasWantedAt {
+                            labeledRow("Gesucht seit", formatDate(user.props.wantedAt))
+                        }
+                        if user.props.hasWantedTill {
+                            labeledRow("Gesucht bis", formatDate(user.props.wantedTill))
+                        }
+
+                        if let vehiclesError {
+                            Label(vehiclesError, systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Theme.Palette.danger)
+                        } else {
+                            let wantedVehicles = checkVehicles.filter { $0.props.wanted }
+                            if wantedVehicles.isEmpty {
+                                if isLoadingVehicles {
+                                    HStack {
+                                        Spacer()
+                                        ProgressView()
+                                        Spacer()
+                                    }
+                                } else {
+                                    labeledRow("Fahrzeug-Fahndung", "Keine Fahrzeuge gesucht")
+                                }
+                            } else {
+                                ForEach(wantedVehicles, id: \.plate) { vehicle in
+                                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                        HStack(spacing: Theme.Spacing.sm) {
+                                            Text("Fahrzeug-Fahndung")
+                                                .foregroundStyle(.secondary)
+                                            Spacer()
+                                            Text(vehicle.plate)
+                                                .font(.subheadline.weight(.semibold))
+                                                .monospaced()
+                                            Text("GESUCHT")
+                                                .font(.caption2.bold())
+                                                .foregroundStyle(Theme.Palette.danger)
+                                        }
+                                        if vehicle.props.hasWantedReason && !vehicle.props.wantedReason.isEmpty {
+                                            Text(vehicle.props.wantedReason)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .padding(.vertical, Theme.Spacing.xxs)
+                                }
+                            }
+                        }
+                    }
+
+                    Section("Verwaltung") {
+                        labeledRow("Offene Strafen", "\(user.props.openFines)")
+                        labeledRow("Punkte in Flensburg", "\(user.props.trafficInfractionPoints)")
+                    }
+
+                    Section("Haft-Verlauf (\(hiringCheckDays) Tage)") {
+                        if let activityError {
+                            Label(activityError, systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(Theme.Palette.danger)
+                        } else {
+                            let jailEntries = jailHistory
+                            if jailEntries.isEmpty {
+                                if isLoadingActivity {
+                                    HStack {
+                                        Spacer()
+                                        ProgressView()
+                                        Spacer()
+                                    }
+                                } else {
+                                    Text("Keine Haft im Zeitraum.")
+                                        .foregroundStyle(.secondary)
+                                }
+                            } else {
+                                ForEach(jailEntries, id: \.id) { entry in
+                                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                        HStack {
+                                            Text(formatDuration(seconds: Int64(entry.data.jailChange.seconds)))
+                                                .font(.subheadline.weight(.semibold))
+                                            Spacer()
+                                            Text(formatDate(entry.createdAt))
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        if entry.data.jailChange.hasLocation && !entry.data.jailChange.location.isEmpty {
+                                            Text(entry.data.jailChange.location)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        if !entry.reason.isEmpty {
+                                            Text(entry.reason)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .padding(.vertical, Theme.Spacing.xxs)
+                                }
+                            }
+                        }
+                    }
+
+                    Section("Dokumente") {
+                        let documentLinks = documentRelations
+                        if documentLinks.isEmpty {
+                            if isLoadingActivity {
+                                HStack {
+                                    Spacer()
+                                    ProgressView()
+                                    Spacer()
+                                }
+                            } else {
+                                Text("Keine Dokumente verknüpft.")
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            ForEach(Array(documentLinks.enumerated()), id: \.offset) { _, entry in
+                                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                                    HStack(spacing: Theme.Spacing.xs) {
+                                        Image(systemName: entry.data.documentRelation.added ? "link" : "link.badge.plus")
+                                            .font(.caption)
+                                            .foregroundStyle(FiveNetModule.documents.tint)
+                                        Text(verbatim: "\(formatDocumentID(entry.data.documentRelation.documentID))")
+                                            .font(.subheadline.weight(.semibold))
+                                            .monospaced()
+                                        Spacer()
+                                        if entry.data.documentRelation.added {
+                                            Text("Bürger zugehörig zu")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        } else {
+                                            Text("Nicht mehr zugehörig")
+                                                .font(.caption2)
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                    }
+                                    HStack(spacing: Theme.Spacing.xs) {
+                                        Text(docRelationLabel(entry.data.documentRelation.relation))
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                        Text(formatRelative(entry.createdAt))
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                                .padding(.vertical, Theme.Spacing.xxs)
+                            }
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+    }
+
+    /// Haft-Einträge aus der Aktivität innerhalb des konfigurierten Rückblicks.
+    private var jailHistory: [Resources_Users_Activity_UserActivity] {
+        guard hiringCheckDays > 0 else { return [] }
+        let cutoff = Calendar.current.date(byAdding: .day, value: -hiringCheckDays, to: Date()) ?? Date()
+        return activity
+            .filter { $0.type == .jail && $0.hasCreatedAt && $0.createdAt.timestamp.date >= cutoff }
+            .sorted { lhs, rhs in lhs.createdAt.timestamp.date > rhs.createdAt.timestamp.date }
+    }
+
+    /// Dokument-Verknüpfungen aus der Aktivität (Dokument-ID ist auch ohne
+    /// Dokument-Zugriff sichtbar — Web `ActivityFeed.vue` „Bürger zugehörig
+    /// zu DOC-…“). Neueste zuerst.
+    private var documentRelations: [Resources_Users_Activity_UserActivity] {
+        activity
+            .filter { $0.type == .document && $0.hasData && $0.data.data != nil }
+            .sorted { lhs, rhs in lhs.createdAt.timestamp.date > rhs.createdAt.timestamp.date }
+    }
+
+    private func formatDate(_ timestamp: Resources_Timestamp_Timestamp) -> String {
+        timestamp.timestamp.date.formatted(date: .abbreviated, time: .omitted)
+    }
+
     private func docRelationLabel(_ relation: Resources_Documents_Relations_DocRelation) -> String {
         switch relation {
         case .mentioned: return "Erwähnt"
@@ -229,13 +477,13 @@ struct CitizenDetailView: View {
         return name.isEmpty ? "" : name
     }
 
-    private func labeledRow(_ label: String, _ value: String) -> some View {
+    private func labeledRow(_ label: String, _ value: String, valueColor: Color? = nil) -> some View {
         HStack {
             Text(label)
                 .foregroundStyle(.secondary)
             Spacer()
             Text(value.isEmpty ? "—" : value)
-                .foregroundStyle(value.isEmpty ? .tertiary : .primary)
+                .foregroundStyle(value.isEmpty ? AnyShapeStyle(.tertiary) : AnyShapeStyle(valueColor ?? .primary))
                 .multilineTextAlignment(.trailing)
         }
     }
@@ -307,6 +555,19 @@ struct CitizenDetailView: View {
             documents = try await appState.listUserDocuments(userID: userID)
         } catch {
             documentsError = error.localizedDescription
+        }
+    }
+
+    private func loadCheckVehicles() async {
+        guard !isLoadingVehicles else { return }
+        isLoadingVehicles = true
+        vehiclesError = nil
+        defer { isLoadingVehicles = false }
+        do {
+            let response = try await appState.listVehicles(userIds: [userID], pageSize: 50)
+            checkVehicles = response.vehicles
+        } catch {
+            vehiclesError = error.localizedDescription
         }
     }
 }

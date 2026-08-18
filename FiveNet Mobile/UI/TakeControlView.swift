@@ -89,14 +89,7 @@ struct TakeControlView: View {
             Section("Aktuelle Einheit") {
                 if let unit = appState.ownUnit {
                     HStack(spacing: Theme.Spacing.lg) {
-                        ZStack {
-                            Circle()
-                                .fill(unitColor(unit).opacity(0.2))
-                                .frame(width: 40, height: 40)
-                            Text("\(unit.users.count)")
-                                .font(.subheadline.bold())
-                                .foregroundStyle(unitColor(unit))
-                        }
+                        UnitBadgeCircle(color: unitColor(unit), content: "\(unit.users.count)", size: 40)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("\(unit.initials) – \(unit.name)")
                                 .font(.subheadline.weight(.medium))

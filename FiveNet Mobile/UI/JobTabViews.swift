@@ -516,7 +516,6 @@ struct JobConductListView: View {
     @State private var totalCount: Int64 = 0
     @State private var hasLoaded = false
     @State private var showCreateSheet = false
-    @State private var selectedEntryID: Int64?
     @State private var searchText = ""
     @State private var searchTask: Task<Void, Never>?
 
@@ -613,12 +612,11 @@ struct JobConductListView: View {
                 } else {
                     Section("\(totalCount) Einträge") {
                         ForEach(entries) { entry in
-                            Button {
-                                selectedEntryID = entry.id
-                            } label: {
+                            NavigationLink(value: ConductRoute(entryID: entry.id)) {
                                 conductRow(entry)
                             }
                             .buttonStyle(.plain)
+                            .navigationLinkIndicatorVisibility(.hidden)
                             .cardRow()
                         }
                     }
@@ -720,9 +718,6 @@ struct JobConductListView: View {
                 hasLoaded = true
                 await load(reset: true)
             }
-        }
-        .navigationDestination(item: $selectedEntryID) { id in
-            ConductEntryDetailView(entryID: id)
         }
     }
 
@@ -935,7 +930,6 @@ struct JobInactiveColleaguesView: View {
     @State private var currentPage: Int64 = 0
     @State private var totalCount: Int64 = 0
     @State private var hasLoaded = false
-    @State private var selectedColleagueID: Int32?
 
     private var totalPages: Int64 {
         max(1, Int64(ceil(Double(totalCount) / Double(Self.pageSize))))
@@ -976,12 +970,11 @@ struct JobInactiveColleaguesView: View {
                 } else {
                     Section("\(totalCount) inaktive Kollegen") {
                         ForEach(colleagues) { colleague in
-                            Button {
-                                selectedColleagueID = colleague.userID
-                            } label: {
+                            NavigationLink(value: ColleagueRoute(userID: colleague.userID)) {
                                 inactiveRow(colleague)
                             }
                             .buttonStyle(.plain)
+                            .navigationLinkIndicatorVisibility(.hidden)
                             .cardRow()
                         }
                     }
@@ -1033,9 +1026,6 @@ struct JobInactiveColleaguesView: View {
                 hasLoaded = true
                 await load(reset: true)
             }
-        }
-        .navigationDestination(item: $selectedColleagueID) { id in
-            ColleagueDetailView(userID: id)
         }
     }
 

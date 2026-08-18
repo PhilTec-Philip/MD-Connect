@@ -18,7 +18,6 @@ struct DocumentsListView: View {
     @State private var totalCount: Int64 = 0
     @State private var hasLoaded = false
     @State private var categoriesLoaded = false
-    @State private var selectedDocumentID: Int64?
     @State private var showCreateSheet = false
     @State private var createdDocumentID: Int64?
     @State private var showCreatedDocument = false
@@ -100,12 +99,11 @@ struct DocumentsListView: View {
                 } else {
                     Section(resultCountText) {
                         ForEach(documents) { document in
-                            Button {
-                                selectedDocumentID = document.id
-                            } label: {
+                            NavigationLink(value: DocumentRoute(documentID: document.id)) {
                                 DocumentRow(document: document)
                             }
                             .buttonStyle(.plain)
+                            .navigationLinkIndicatorVisibility(.hidden)
                             .cardRow()
                         }
                     }
@@ -196,9 +194,6 @@ struct DocumentsListView: View {
                 await loadCategories()
                 await load(reset: true)
             }
-        }
-        .navigationDestination(item: $selectedDocumentID) { id in
-            DocumentDetailView(documentID: id)
         }
         .navigationDestination(for: DocumentRoute.self) { route in
             DocumentDetailView(documentID: route.documentID)

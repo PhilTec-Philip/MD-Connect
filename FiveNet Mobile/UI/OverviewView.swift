@@ -11,6 +11,7 @@ struct OverviewView: View {
     ]
 
     @State private var showGlobalSearch = false
+    @State private var showQuickAccessEditor = false
 
     var body: some View {
         NavigationStack {
@@ -34,16 +35,28 @@ struct OverviewView: View {
                         profileHero(name: name, job: jobLine)
                     }
 
-                    let quick = quickModules
+                    let quick = appState.effectiveQuickAccess
                     if !quick.isEmpty {
-                        SectionHeader("Schnellzugriff")
-                            .padding(.horizontal, Theme.Spacing.xs)
+                        HStack {
+                            SectionHeader("Schnellzugriff")
+                            Spacer()
+                            Button {
+                                showQuickAccessEditor = true
+                            } label: {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(Theme.Palette.accent)
+                                    .accessibilityLabel("Schnellzugriff bearbeiten")
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, Theme.Spacing.xs)
 
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: Theme.Spacing.lg) {
-                                ForEach(quick) { module in
-                                    NavigationLink(value: module) {
-                                        QuickAccessTile(module)
+                                ForEach(quick) { item in
+                                    NavigationLink(value: item) {
+                                        QuickAccessTile(item)
                                     }
                                     .buttonStyle(.plain)
                                 }
@@ -70,14 +83,25 @@ struct OverviewView: View {
                 }
                 .padding(Theme.Spacing.xl)
             }
-            .background(Theme.Palette.background.ignoresSafeArea())
+.background(Theme.Palette.background.ignoresSafeArea())
             .navigationDestination(for: FiveNetModule.self) { module in
                 moduleRootView(module)
             }
+            .navigationDestination(for: QuickAccessItem.self) { item in
+                moduleRootView(item.module, initialTab: item.tab)
+            }
             .moduleDestinations()
+            .onAppear {
+                // Zurück vom Modul → kein aktives Modul mehr (Bildschirmschoner).
+                appState.setActiveModule(nil)
+            }
         }
         .sheet(isPresented: $showGlobalSearch) {
             GlobalSearchView()
+                .environment(appState)
+        }
+        .sheet(isPresented: $showQuickAccessEditor) {
+            QuickAccessEditSheet()
                 .environment(appState)
         }
         .fullScreenCover(item: alarmBinding) { alarm in
@@ -102,12 +126,6 @@ struct OverviewView: View {
                 }
             }
         )
-    }
-
-    /// Schnellzugriff-Module in festgelegter Reihenfolge, gefiltert auf die
-    /// tatsächlich zugänglichen.
-    private var quickModules: [FiveNetModule] {
-        FiveNetModule.quickAccessOrder.filter { appState.accessibleModules.contains($0) }
     }
 
     /// Profilkarte mit Avatar-Tile, Begrüßung und aktueller Funktion.
@@ -213,14 +231,27 @@ struct OverviewView: View {
 
 /// Kompakte Schnellzugriffs-Kachel für den horizontalen Bereich der Startseite:
 /// Verlaufs-Icon-Kachel + Titel. Breite/Hintergrund konfigurierbar, damit lange
-/// Modultitel nicht abgeschnitten werden.
+/// Modultitel nicht abgeschnitten werden. Akzeptiert sowohl ein ganzes Modul
+/// als auch ein direktes Tab-Ziel (Schnellzugriff).
 struct QuickAccessTile: View {
     let module: FiveNetModule
+    let title: String
+    let icon: String
     var width: CGFloat = 68
     var showsBackground = false
 
+    init(_ item: QuickAccessItem, width: CGFloat = 68, showsBackground: Bool = false) {
+        self.module = item.module
+        self.title = item.title
+        self.icon = item.icon
+        self.width = width
+        self.showsBackground = showsBackground
+    }
+
     init(_ module: FiveNetModule, width: CGFloat = 68, showsBackground: Bool = false) {
         self.module = module
+        self.title = module.title
+        self.icon = module.icon
         self.width = width
         self.showsBackground = showsBackground
     }
@@ -230,19 +261,19 @@ struct QuickAccessTile: View {
             ZStack {
                 RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
                     .fill(LinearGradient(colors: module.gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
-                Image(systemName: module.icon)
+                Image(systemName: icon)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
             }
             .frame(width: 52, height: 52)
             .shadow(color: module.tint.opacity(0.35), radius: 6, y: 3)
 
-            Text(module.title)
+            Text(title)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
         }
         .frame(width: width)
         .padding(.vertical, Theme.Spacing.sm)

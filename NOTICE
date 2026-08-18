@@ -1,7 +1,7 @@
-MD-Connect
+FiveNet Mobile
 Copyright 2026 Philip Müller
 
-This product is licensed under the Apache License, Version 2.0.
+This product is a community project and is licensed under the Apache License, Version 2.0.
 A copy of the license is available in the LICENSE file in this repository.
 
 ------------------------------------------------------------------------
@@ -12,17 +12,28 @@ Copyright 2023 Alexander Trost
 Licensed under the Apache License, Version 2.0.
 
 Portions of this software (the gRPC/protobuf service definitions and the
-generated client bindings under MD-Connect/Generated) are derived from the
-FiveNet project. This software is an independent third-party client for the
-FiveNet roleplay server and is not affiliated with, endorsed by, sponsored by,
-or otherwise connected to the FiveNet project or Alexander Trost.
-
-"FiveNet" is a product name of its respective owner. It is used here solely
-to describe the server software this client interoperates with.
+generated client bindings under FiveNet Mobile/Generated) are derived from the
+FiveNet project.
 
 SwiftProtobuf (https://github.com/apple/swift-protobuf)
 Copyright 2014-2017 Apple Inc. and the Swift project authors
 Licensed under the Apache License, Version 2.0.
+
+------------------------------------------------------------------------
+Trademarks
+
+iOS and iPadOS are trademarks of Apple Inc., registered in the U.S. and
+other countries and regions. This product is not affiliated with, endorsed
+by, or sponsored by Apple Inc. The use of "iOS" and "iPadOS" is purely
+descriptive and refers to the operating systems this product runs on.
+
+Discord and the Discord logo are trademarks of Discord Inc. in the U.S.
+and other countries. This product is not affiliated with or endorsed by
+Discord Inc. The FiveNet server provides Discord integrations; the
+Discord-related features in this product simply display data provided by
+the FiveNet server.
+
+"FiveNet" is a product name of its respective owner.
 
 ------------------------------------------------------------------------
 Disclaimer of Warranty

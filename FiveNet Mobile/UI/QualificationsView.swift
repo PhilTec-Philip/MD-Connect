@@ -26,6 +26,12 @@ struct QualificationsView: View {
         var id: String { rawValue }
     }
 
+    init(initialTab: QuickAccessTab? = nil) {
+        if initialTab == .qualificationsAll {
+            _selectedTab = State(initialValue: .all)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Picker("Ansicht", selection: $selectedTab) {
@@ -64,7 +70,6 @@ private struct QualificationResultsView: View {
     @State private var currentPage: Int64 = 0
     @State private var totalCount: Int64 = 0
     @State private var hasLoaded = false
-    @State private var selectedQualificationID: Int64?
 
     private var totalPages: Int64 {
         max(1, Int64(ceil(Double(totalCount) / Double(Self.pageSize))))
@@ -104,12 +109,11 @@ private struct QualificationResultsView: View {
                 } else {
                 Section("\(totalCount) Qualifizierungen") {
                     ForEach(results) { result in
-                        Button {
-                            selectedQualificationID = result.qualificationID
-                        } label: {
+                        NavigationLink(value: QualificationRoute(qualificationID: result.qualificationID)) {
                             QualificationResultRow(result: result)
                         }
                         .buttonStyle(.plain)
+                        .navigationLinkIndicatorVisibility(.hidden)
                         .cardRow()
                     }
                 }
@@ -132,9 +136,6 @@ private struct QualificationResultsView: View {
                 hasLoaded = true
                 await load(reset: true)
             }
-        }
-        .navigationDestination(item: $selectedQualificationID) { id in
-            QualificationDetailView(qualificationID: id)
         }
     }
 
@@ -277,7 +278,6 @@ struct ColleagueQualificationsView: View {
     @State private var currentPage: Int64 = 0
     @State private var totalCount: Int64 = 0
     @State private var hasLoaded = false
-    @State private var selectedQualificationID: Int64?
 
     private var totalPages: Int64 {
         max(1, Int64(ceil(Double(totalCount) / Double(Self.pageSize))))
@@ -317,12 +317,11 @@ struct ColleagueQualificationsView: View {
                 } else {
                     Section("\(totalCount) Qualifizierungen") {
                         ForEach(results) { result in
-                            Button {
-                                selectedQualificationID = result.qualificationID
-                            } label: {
+                            NavigationLink(value: QualificationRoute(qualificationID: result.qualificationID)) {
                                 QualificationResultRow(result: result)
                             }
                             .buttonStyle(.plain)
+                            .navigationLinkIndicatorVisibility(.hidden)
                             .cardRow()
                         }
                     }
@@ -370,9 +369,6 @@ struct ColleagueQualificationsView: View {
                 hasLoaded = true
                 await load(reset: true)
             }
-        }
-        .navigationDestination(item: $selectedQualificationID) { id in
-            QualificationDetailView(qualificationID: id)
         }
     }
 
@@ -415,8 +411,6 @@ private struct QualificationsListView: View {
     @State private var totalCount: Int64 = 0
     @State private var hasLoaded = false
     @State private var searchTask: Task<Void, Never>?
-    @State private var selectedQualificationID: Int64?
-    @State private var isSearchPresented = false
 
     private var totalPages: Int64 {
         max(1, Int64(ceil(Double(totalCount) / Double(Self.pageSize))))
@@ -425,6 +419,31 @@ private struct QualificationsListView: View {
     var body: some View {
         Group {
             List {
+                Section {
+                    SectionCard {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                            HStack(spacing: Theme.Spacing.sm) {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundStyle(.secondary)
+                                TextField("Qualifikation suchen", text: $searchText)
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                                if !searchText.isEmpty {
+                                    Button {
+                                        searchText = ""
+                                        Task { await load(reset: true) }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                    .cardRow()
+                }
+
                 if let errorMessage {
                     Section {
                         StatusLabelRow(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -456,12 +475,11 @@ private struct QualificationsListView: View {
                 } else {
                 Section("\(totalCount) Qualifikationen") {
                     ForEach(qualifications) { qualification in
-                        Button {
-                            selectedQualificationID = qualification.id
-                        } label: {
+                        NavigationLink(value: QualificationRoute(qualificationID: qualification.id)) {
                             QualificationRow(qualification: qualification, characterJob: appState.character?.job)
                         }
                         .buttonStyle(.plain)
+                        .navigationLinkIndicatorVisibility(.hidden)
                         .cardRow()
                     }
                 }
@@ -501,8 +519,6 @@ private struct QualificationsListView: View {
                 }
             }
             .cardListStyle()
-            .searchable(text: $searchText, isPresented: $isSearchPresented, prompt: "Qualifikation suchen")
-            .autocorrectionDisabled()
             .onChange(of: searchText) {
                 searchTask?.cancel()
                 let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -528,9 +544,6 @@ private struct QualificationsListView: View {
                 await load(reset: true)
             }
         }
-        .navigationDestination(item: $selectedQualificationID) { id in
-            QualificationDetailView(qualificationID: id)
-        }
     }
 
     private func load(page: Int64 = 0, reset: Bool = false) async {
@@ -550,7 +563,6 @@ private struct QualificationsListView: View {
             )
             qualifications = response.qualifications
             totalCount = response.pagination.totalCount
-            isSearchPresented = totalCount > 0 || !searchText.isEmpty
         } catch {
             errorMessage = error.localizedDescription
             currentPage = previous

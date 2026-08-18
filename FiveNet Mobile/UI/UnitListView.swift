@@ -44,10 +44,11 @@ struct UnitListView: View {
                 ForEach(sections) { section in
                     Section(section.title) {
                         ForEach(section.units) { unit in
-                            NavigationLink(value: CentrumRoute.unit(unit.id)) {
+                            NavigationLink(value: UnitRoute(unitID: unit.id)) {
                                 UnitRow(unit: unit)
                             }
                             .buttonStyle(.plain)
+                            .navigationLinkIndicatorVisibility(.hidden)
                             .cardRow()
                         }
                     }
@@ -83,14 +84,7 @@ private struct UnitRow: View {
                 .padding(.vertical, Theme.Spacing.md)
 
             HStack(spacing: Theme.Spacing.lg) {
-                ZStack {
-                    Circle()
-                        .fill(unitColor.opacity(0.2))
-                        .frame(width: 44, height: 44)
-                    Text("\(unit.users.count)")
-                        .font(.headline)
-                        .foregroundStyle(unitColor)
-                }
+                UnitBadgeCircle(color: unitColor, content: "\(unit.users.count)")
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     Text("\(unit.initials) – \(unit.name)")
                         .font(.headline)
@@ -104,11 +98,13 @@ private struct UnitRow: View {
                 Text(unit.status.status.label)
                     .font(.caption.bold())
                     .foregroundStyle(unit.status.status.color)
+                    .padding(.trailing, Theme.Spacing.md)
             }
             .padding(.leading, Theme.Spacing.xl)
             .padding(.vertical, Theme.Spacing.xs)
 
             Spacer(minLength: 0)
+            CardChevron()
         }
         .padding(Theme.Spacing.md)
         .padding(.trailing, Theme.Spacing.sm)

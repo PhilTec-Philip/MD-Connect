@@ -13,7 +13,6 @@ struct WikiView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var searchTask: Task<Void, Never>?
-    @State private var selectedPage: WikiPageSelection?
 
     var body: some View {
         Group {
@@ -44,9 +43,6 @@ struct WikiView: View {
         }
         .navigationDestination(for: Int64.self) { pageID in
             WikiPageView(pageID: pageID)
-        }
-        .navigationDestination(item: $selectedPage) { selection in
-            WikiPageView(pageID: selection.pageID)
         }
         .task {
             await loadRoots()
@@ -88,11 +84,10 @@ struct WikiView: View {
 
             Section {
                 ForEach(rootPages) { page in
-                    Button {
-                        selectedPage = WikiPageSelection(pageID: page.id)
-                    } label: {
+                    NavigationLink(value: page.id) {
                         WikiRootRow(page: page, isOwnJob: page.job == appState.character?.job)
                     }
+                    .navigationLinkIndicatorVisibility(.hidden)
                     .buttonStyle(.plain)
                     .cardRow()
                     .swipeActions(edge: .leading) {
@@ -149,11 +144,10 @@ struct WikiView: View {
 
             Section {
                 ForEach(searchResults) { page in
-                    Button {
-                        selectedPage = WikiPageSelection(pageID: page.id)
-                    } label: {
+                    NavigationLink(value: page.id) {
                         WikiSearchResultRow(page: page)
                     }
+                    .navigationLinkIndicatorVisibility(.hidden)
                     .buttonStyle(.plain)
                     .cardRow()
                 }
@@ -226,13 +220,6 @@ struct WikiView: View {
             errorMessage = error.localizedDescription
         }
     }
-}
-
-/// Navigations-Auswahl für Wiki-Root-/Suchergebnis-Zeilen. Ein eigener Typ
-/// statt nacktem `Int64`, damit die item-basierte Navigation nicht mit der
-/// `navigationDestination(for: Int64.self)` der Baum-Navigation kollidiert.
-private struct WikiPageSelection: Hashable {
-    let pageID: Int64
 }
 
 private struct WikiRootRow: View {

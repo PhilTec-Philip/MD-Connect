@@ -13,7 +13,18 @@ struct FiveNet_MobileApp: App {
     @State private var appState = AppState()
 
     init() {
+        registerScreensaverDefaults()
         configureGlobalAppearance()
+    }
+
+    /// Default-Wert für den Bildschirmschoner-Toggle registrieren, damit die
+    /// App und die Systemeinstellungen (Settings.bundle) denselben Startwert
+    /// verwenden, bevor der Nutzer die Einstellung jemals anfasst.
+    private func registerScreensaverDefaults() {
+        UserDefaults.standard.register(defaults: [
+            "fivenetScreenSaverEnabled": true,
+            "fivenetScreenSaverDelay": 15,
+        ])
     }
 
     /// Global einheitliche, moderne Darstellung von Navigationsleiste und

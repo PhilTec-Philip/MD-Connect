@@ -37,6 +37,12 @@ struct MailView: View {
     @State private var showUntestedHint = false
     @State private var searchTask: Task<Void, Never>?
 
+    init(initialTab: QuickAccessTab? = nil) {
+        if initialTab == .mailArchive {
+            _tab = State(initialValue: .archive)
+        }
+    }
+
     private var isSearching: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }

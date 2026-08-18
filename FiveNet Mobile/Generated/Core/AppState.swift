@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftProtobuf
+import SwiftUI
 
 /// A single entry of the centrum activity feed, derived from the live
 /// `unitStatus` / `dispatchStatus` stream events.
@@ -92,6 +93,11 @@ final class AppState {
     private(set) var isChannelConnected = false
     private(set) var errorMessage: String?
 
+    /// Das aktuell geöffnete Modul (gesetzt, sobald eine Modul-Wurzel im
+    /// NavigationStack erscheint). Wird vom Bildschirmschoner genutzt, um z. B.
+    /// das Dokumente-Modul von der Bildschirmschoner-Aktivierung auszunehmen.
+    private(set) var activeModule: FiveNetModule?
+
     /// The active character's job properties (logo, radio frequency, MOTD) as
     /// delivered by the auth `ChooseCharacter` response. The server `GetJobProps`
     /// RPC is permission-gated, so web and the app use the auth response instead.
@@ -174,6 +180,7 @@ final class AppState {
         pinnedWikiJobs = (UserDefaults.standard.array(forKey: "pinnedWikiJobs") as? [String]) ?? []
         loadDutyUnitID()
         loadClosedDispatchIDs()
+        loadQuickAccess()
         if let serverURL = self.session.serverURL {
             makeClient(baseURL: serverURL)
         }
@@ -181,6 +188,15 @@ final class AppState {
     }
 
     // MARK: - Session restoration
+
+    /// Setzt das aktuell geöffnete Modul (für den Bildschirmschoner).
+    /// Wird von der Modul-Wurzel beim Erscheinen gesetzt und beim Erscheinen
+    /// der Overview/Quick-Wurzel (Zurücknavigieren) wieder auf `nil`
+    /// zurückgesetzt. Detail-Pushes innerhalb eines Moduls ändern den Wert
+    /// nicht, da dort kein Setter läuft.
+    func setActiveModule(_ module: FiveNetModule?) {
+        activeModule = module
+    }
 
     func restore() {
         guard let serverURL = session.serverURL else {
@@ -287,6 +303,7 @@ final class AppState {
         loadDutyUnitID()
         resetSessionData()
         loadClosedDispatchIDs()
+        loadQuickAccess()
         if session.accountToken != nil || session.userToken != nil {
             phase = .chooseCharacter
             Task { await loadCharacters() }
@@ -496,6 +513,34 @@ final class AppState {
         return permissions.contains { $0.guardName == guardName }
     }
 
+    /// Attribute check mirroring the web `attr`: true when the character's role
+    /// attributes contain `key` with `value` for the given permission (e.g.
+    /// `attr("jobs.ColleaguesService/GetColleague", "Types", "Labels")`). A
+    /// superuser bypasses the check, exactly like the web `useAuth.attr`.
+    func attr(_ permission: String, key: String, value: String) -> Bool {
+        if isSuperuser { return true }
+
+        let parts = permission.split(separator: "/")
+        guard parts.count == 2 else { return false }
+        let serviceParts = parts[0].split(separator: ".")
+        guard serviceParts.count == 2 else { return false }
+        let namespace = String(serviceParts[0])
+        let service = String(serviceParts[1])
+        let name = String(parts[1])
+
+        guard let attribute = attributes.first(where: { attr in
+            attr.namespace == namespace && attr.service == service && attr.name == name && attr.key == key
+        }) else { return false }
+
+        switch attribute.value.validValues {
+        case .stringList(let list): return list.strings.contains(value)
+        case .jobList(let list): return list.strings.contains(value)
+        case .jobGradeList(let list):
+            return list.jobs[value] != nil || list.grades[value] != nil
+        case .none: return false
+        }
+    }
+
     /// True when the account can access config-admin gated screens and RPCs
     /// (web `canBeConfigAdmin`). The server delivers `PermConfigAdmin`
     /// (`internal-superuser-configadmin`) in the character permission list when
@@ -680,6 +725,44 @@ final class AppState {
 
     func isWikiPinned(_ job: String) -> Bool {
         pinnedWikiJobs.contains(job)
+    }
+
+    // MARK: - Quick access (persisted per server, observable)
+
+    /// User-configured quick access entries on the overview. An empty array
+    /// falls back to the default module order (`FiveNetModule.quickAccessOrder`).
+    /// Stored per server so different servers keep their own selection.
+    private(set) var quickAccessItems: [QuickAccessItem] = []
+
+    private static func quickAccessKey(for url: URL) -> String {
+        "quickAccess#\(url.absoluteString)"
+    }
+
+    private func loadQuickAccess() {
+        guard let serverURL = session.serverURL else {
+            quickAccessItems = []
+            return
+        }
+        let ids = (UserDefaults.standard.array(forKey: Self.quickAccessKey(for: serverURL)) as? [String]) ?? []
+        quickAccessItems = ids.compactMap(QuickAccessItem.init(id:))
+    }
+
+    /// Persists the quick access order for the currently active server. Empty
+    /// means "use the default module order again".
+    func setQuickAccessItems(_ items: [QuickAccessItem]) {
+        quickAccessItems = items
+        guard let serverURL = session.serverURL else { return }
+        UserDefaults.standard.set(items.map(\.id), forKey: Self.quickAccessKey(for: serverURL))
+    }
+
+    /// The quick access entries to display, filtered to the accessible modules.
+    /// Falls back to the default module order when nothing is configured.
+    var effectiveQuickAccess: [QuickAccessItem] {
+        let configured = quickAccessItems
+        let items = configured.isEmpty
+            ? FiveNetModule.quickAccessOrder.map { QuickAccessItem.module($0) }
+            : configured
+        return items.filter { accessibleModules.contains($0.module) }
     }
 
     func clearCentrumError() {
@@ -1041,25 +1124,25 @@ final class AppState {
     /// character's own unit. The status event carries the assigned unit id;
     /// the full dispatch snapshot is taken from the current dispatches list
     /// (fetched on demand when the update arrives before the dispatch itself).
+    ///
+    /// A `NEED_ASSISTANCE` (reinforcement) request from a *different* unit
+    /// alerts every unit except the requesting one, so nearby colleagues know
+    /// help is needed.
     private func maybeTriggerAlarm(for status: Resources_Centrum_Dispatches_DispatchStatus) {
         guard let ownUnitID,
-              status.unitID == ownUnitID,
               !acceptedDispatchIDs.contains(status.dispatchID),
               !alarmedDispatchIDs.contains(status.dispatchID) else { return }
         let kind: DispatchAlarm.Kind
         switch status.status {
         case .unitAssigned:
+            guard status.unitID == ownUnitID else { return }
             kind = .assignment
         case .needAssistance:
+            // The status event's unit id is the *requesting* unit. Every unit
+            // except it gets the reinforcement panic.
+            guard status.unitID != ownUnitID else { return }
             kind = .reinforcement
         default:
-            return
-        }
-        // A reinforcement request raised by the current character must not fire
-        // a panic for themselves — they already know they asked for help (the
-        // blinking "Verstärkung" status button shows the state). Firing anyway
-        // would hide the dispatch from "Dein Einsatz" via `pendingAlarmDispatchIDs`.
-        if kind == .reinforcement, isOwnReinforcementRequest(status) {
             return
         }
         alarmedDispatchIDs.insert(status.dispatchID)
@@ -1081,37 +1164,25 @@ final class AppState {
     /// Robust fallback: some server builds broadcast assignments as an updated
     /// dispatch (latest status `UNIT_ASSIGNED`) instead of a separate
     /// `dispatch_status` event. Triggers the alarm when the assigned unit is
-    /// the character's own.
+    /// the character's own; a `NEED_ASSISTANCE` request alerts every unit
+    /// except the requesting one.
     private func maybeTriggerAlarm(for dispatch: Resources_Centrum_Dispatches_Dispatch) {
         guard ownUnitID != nil,
               !acceptedDispatchIDs.contains(dispatch.id),
-              !alarmedDispatchIDs.contains(dispatch.id),
-              targetsOwnUnit(dispatch) else { return }
+              !alarmedDispatchIDs.contains(dispatch.id) else { return }
         let kind: DispatchAlarm.Kind
         switch dispatch.status.status {
         case .unitAssigned:
+            guard targetsOwnUnit(dispatch) else { return }
             kind = .assignment
         case .needAssistance:
+            guard dispatch.status.hasUnitID, dispatch.status.unitID != ownUnitID else { return }
             kind = .reinforcement
         default:
             return
         }
-        if kind == .reinforcement, isOwnReinforcementRequest(dispatch.status) {
-            return
-        }
         alarmedDispatchIDs.insert(dispatch.id)
         activeAlarm = DispatchAlarm(id: dispatch.id, dispatch: dispatch, kind: kind, requester: dispatch.status.hasUser ? dispatch.status.user : nil)
-    }
-
-    /// Whether the reinforcement request on a `dispatch_status` event was raised
-    /// by the current character themselves (checked via the requester user id).
-    /// Such self-requests must not fire the reinforcement panic for the same
-    /// character that pressed the button.
-    private func isOwnReinforcementRequest(_ status: Resources_Centrum_Dispatches_DispatchStatus) -> Bool {
-        guard let currentUserID = activeCharacterUserID else { return false }
-        if status.hasUserID, status.userID == currentUserID { return true }
-        if status.hasUser, status.user.userID == currentUserID { return true }
-        return false
     }
 
     private func targetsOwnUnit(_ dispatch: Resources_Centrum_Dispatches_Dispatch) -> Bool {
@@ -1715,6 +1786,13 @@ final class AppState {
         return try await client.getColleagueLabelsStats(labelIds: labelIds)
     }
 
+    /// Fetches job statistics (employee count over time, web
+    /// `jobs.StatsService/GetStats`). Category/period mirror the web query.
+    func getStats(start: Date, end: Date, period: Resources_Stats_StatsPeriod = .unspecified, category: Resources_Stats_StatsCategory = .employeeCountOverTime) async throws -> Services_Jobs_GetStatsResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.getStats(start: start, end: end, period: period, category: category)
+    }
+
     /// Lists timeclock entries (daily view).
     func listTimeclock(userMode: Resources_Jobs_Timeclock_TimeclockViewMode = .unspecified, mode: Resources_Jobs_Timeclock_TimeclockMode = .daily, perDay: Bool = false, userIds: [Int32] = [], start: Date? = nil, end: Date? = nil, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListTimeclockResponse {
         guard let client else { throw FiveNetError.notConnected }
@@ -1832,6 +1910,140 @@ final class AppState {
             props.clearLogoFileID()
             jobProps = props
         }
+    }
+
+    // MARK: - Jobs: Gruppen (GroupsService)
+
+    /// Lists job groups, optionally filtered by states/kind/search.
+    func listGroups(states: [Resources_Jobs_Groups_GroupState] = [], kind: Resources_Jobs_Groups_GroupType? = nil, search: String = "", includeCounts: Bool = true, includeInactive: Bool = false, includeArchived: Bool = false, groupIds: [Int32] = [], sortColumn: String = "sort_rank", desc: Bool = false, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupsResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.listGroups(states: states, kind: kind, search: search, includeCounts: includeCounts, includeInactive: includeInactive, includeArchived: includeArchived, groupIds: groupIds, sortColumn: sortColumn, desc: desc, offset: offset, pageSize: pageSize)
+    }
+
+    /// Fetches a single job group with optional include flags.
+    func getGroup(id: Int64, includeRules: Bool = false, includeLeaders: Bool = false, includeManualMembers: Bool = false, includeExclusions: Bool = false, includeResolvedMembers: Bool = false, includeArchived: Bool = true) async throws -> Services_Jobs_GetGroupResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.getGroup(id: id, includeRules: includeRules, includeLeaders: includeLeaders, includeManualMembers: includeManualMembers, includeExclusions: includeExclusions, includeResolvedMembers: includeResolvedMembers, includeArchived: includeArchived)
+    }
+
+    /// Creates a new job group. The server fills `job` from the session token.
+    func createGroup(_ group: Services_Jobs_CreateGroupRequest) async throws -> Resources_Jobs_Groups_Group {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.createGroup(group)
+    }
+
+    /// Updates an existing job group.
+    func updateGroup(_ request: Services_Jobs_UpdateGroupRequest) async throws -> Resources_Jobs_Groups_Group {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.updateGroup(request)
+    }
+
+    /// Archives a job group (requires a reason).
+    func archiveGroup(id: Int64, reason: String = "") async throws -> Resources_Jobs_Groups_Group {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.archiveGroup(id: id, reason: reason)
+    }
+
+    /// Restores an archived job group.
+    func restoreGroup(id: Int64) async throws -> Resources_Jobs_Groups_Group {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.restoreGroup(id: id)
+    }
+
+    /// Deletes a job group logo.
+    func deleteGroupLogo(id: Int64) async throws -> Resources_Jobs_Groups_Group {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.deleteGroupLogo(id: id)
+    }
+
+    /// Lists resolved group members (rules + manual + leaders − exclusions).
+    func listGroupMembers(groupID: Int64, search: String = "", sources: [Resources_Jobs_Groups_GroupMemberSource] = [], includeExcluded: Bool = true, includeLeaders: Bool = true, includeReasons: Bool = true, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupMembersResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.listGroupMembers(groupID: groupID, search: search, sources: sources, includeExcluded: includeExcluded, includeLeaders: includeLeaders, includeReasons: includeReasons, offset: offset, pageSize: pageSize)
+    }
+
+    /// Lists explicitly added group members.
+    func listGroupManualMembers(groupID: Int64, search: String = "", offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupManualMembersResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.listGroupManualMembers(groupID: groupID, search: search, offset: offset, pageSize: pageSize)
+    }
+
+    /// Lists group member exclusions.
+    func listGroupMemberExclusions(groupID: Int64, search: String = "", offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupMemberExclusionsResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.listGroupMemberExclusions(groupID: groupID, search: search, offset: offset, pageSize: pageSize)
+    }
+
+    /// Lists group leaders.
+    func listGroupLeaders(groupID: Int64, search: String = "", offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupLeadersResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.listGroupLeaders(groupID: groupID, search: search, offset: offset, pageSize: pageSize)
+    }
+
+    /// Adds (or updates via upsert semantics) a manual group member.
+    func addGroupMember(groupID: Int64, userID: Int32, reason: String = "") async throws -> Services_Jobs_AddGroupMemberResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.addGroupMember(groupID: groupID, userID: userID, reason: reason)
+    }
+
+    /// Removes a manual group member.
+    func removeGroupMember(groupID: Int64, userID: Int32, reason: String = "") async throws -> Services_Jobs_RemoveGroupMemberResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.removeGroupMember(groupID: groupID, userID: userID, reason: reason)
+    }
+
+    /// Excludes a user from resolved group membership (upsert semantics for edits).
+    func excludeGroupMember(groupID: Int64, userID: Int32, reasonType: Resources_Jobs_Groups_GroupExclusionReason, reason: String = "") async throws -> Services_Jobs_ExcludeGroupMemberResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.excludeGroupMember(groupID: groupID, userID: userID, reasonType: reasonType, reason: reason)
+    }
+
+    /// Removes a group member exclusion.
+    func removeGroupMemberExclusion(groupID: Int64, userID: Int32, reason: String = "") async throws -> Services_Jobs_RemoveGroupMemberExclusionResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.removeGroupMemberExclusion(groupID: groupID, userID: userID, reason: reason)
+    }
+
+    /// Adds a group leader.
+    func addGroupLeader(groupID: Int64, userID: Int32, reason: String = "") async throws -> Services_Jobs_AddGroupLeaderResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.addGroupLeader(groupID: groupID, userID: userID, reason: reason)
+    }
+
+    /// Removes a group leader.
+    func removeGroupLeader(groupID: Int64, userID: Int32, reason: String = "") async throws -> Services_Jobs_RemoveGroupLeaderResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.removeGroupLeader(groupID: groupID, userID: userID, reason: reason)
+    }
+
+    /// Lists group membership rules.
+    func listGroupRules(groupID: Int64, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupRulesResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.listGroupRules(groupID: groupID, offset: offset, pageSize: pageSize)
+    }
+
+    /// Creates a new group membership rule.
+    func createGroupRule(groupID: Int64, rule: Services_Jobs_GroupRuleInput, reason: String = "") async throws -> Services_Jobs_CreateGroupRuleResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.createGroupRule(groupID: groupID, rule: rule, reason: reason)
+    }
+
+    /// Updates an existing group membership rule.
+    func updateGroupRule(groupID: Int64, ruleID: Int64, rule: Services_Jobs_GroupRuleInput, reason: String = "") async throws -> Services_Jobs_UpdateGroupRuleResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.updateGroupRule(groupID: groupID, ruleID: ruleID, rule: rule, reason: reason)
+    }
+
+    /// Deletes a group membership rule (requires a reason).
+    func deleteGroupRule(groupID: Int64, ruleID: Int64, reason: String = "") async throws -> Services_Jobs_DeleteGroupRuleResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.deleteGroupRule(groupID: groupID, ruleID: ruleID, reason: reason)
+    }
+
+    /// Lists group activity (Audit-like feed for a group).
+    func listGroupActivity(groupID: Int64, types: [Resources_Jobs_Groups_GroupActivityType] = [], userID: Int32? = nil, from: Date? = nil, to: Date? = nil, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupActivityResponse {
+        guard let client else { throw FiveNetError.notConnected }
+        return try await client.listGroupActivity(groupID: groupID, types: types, userID: userID, from: from, to: to, offset: offset, pageSize: pageSize)
     }
 
     // MARK: - Settings: Leitstelle (Centrum)

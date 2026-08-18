@@ -129,6 +129,7 @@ struct GlobalSearchView: View {
                             SearchCitizenRow(user: user)
                         }
                         .buttonStyle(.plain)
+                        .navigationLinkIndicatorVisibility(.hidden)
                         .cardRow()
                     }
                 } header: {
@@ -143,6 +144,7 @@ struct GlobalSearchView: View {
                             SearchVehicleRow(vehicle: vehicle)
                         }
                         .buttonStyle(.plain)
+                        .navigationLinkIndicatorVisibility(.hidden)
                         .cardRow()
                     }
                 } header: {
@@ -157,6 +159,7 @@ struct GlobalSearchView: View {
                             SearchDispatchRow(dispatch: dispatch)
                         }
                         .buttonStyle(.plain)
+                        .navigationLinkIndicatorVisibility(.hidden)
                         .cardRow()
                     }
                 } header: {
@@ -171,6 +174,7 @@ struct GlobalSearchView: View {
                             SearchDocumentRow(document: document)
                         }
                         .buttonStyle(.plain)
+                        .navigationLinkIndicatorVisibility(.hidden)
                         .cardRow()
                     }
                 } header: {
@@ -185,6 +189,7 @@ struct GlobalSearchView: View {
                             SearchWikiRow(page: page)
                         }
                         .buttonStyle(.plain)
+                        .navigationLinkIndicatorVisibility(.hidden)
                         .cardRow()
                     }
                 } header: {
@@ -339,7 +344,6 @@ private struct SearchVehicleRow: View {
             }
 
             Spacer()
-
             CardChevron()
         }
         .padding(Theme.Spacing.xl)
@@ -519,7 +523,6 @@ private struct SearchWikiRow: View {
             }
 
             Spacer()
-
             CardChevron()
         }
         .padding(Theme.Spacing.xl)

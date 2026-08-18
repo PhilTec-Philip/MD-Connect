@@ -50,6 +50,16 @@ struct WikiTable {
     var columnCount: Int {
         rows.map { $0.count }.max() ?? 0
     }
+
+    /// Returns the cell at the given row/column, padded with an empty cell if
+    /// the row is shorter than `columnCount` (ragged rows).
+    func cell(row: Int, column: Int) -> WikiTableCell {
+        let cells = rows.indices.contains(row) ? rows[row] : []
+        if cells.indices.contains(column) {
+            return cells[column]
+        }
+        return WikiTableCell(blocks: [])
+    }
 }
 
 /// Converts a wiki page's `Content` into renderable blocks.
@@ -405,8 +415,23 @@ enum WikiContent {
     /// Extracts a table grid from an HTML `<table>` node. Rows are `<tr>`
     /// children, cells are `<td>`/`<th>` children.
     private static func htmlTable(from node: Resources_Common_Content_RichTextHtmlNode) -> WikiTable {
+        // Go's legacy parser preserves the full HTML tree, so rows can be nested
+        // inside `<thead>`/`<tbody>`/`<tfoot>` wrappers (not only direct `<tr>`
+        // children). Flatten those wrappers first, then collect the rows.
+        func rowNodes(from nodes: [Resources_Common_Content_RichTextHtmlNode]) -> [Resources_Common_Content_RichTextHtmlNode] {
+            nodes.flatMap { child -> [Resources_Common_Content_RichTextHtmlNode] in
+                guard child.type == .element else { return [] }
+                switch child.tag {
+                case "thead", "tbody", "tfoot":
+                    return rowNodes(from: child.content)
+                default:
+                    return [child]
+                }
+            }
+        }
+
         var rows: [[WikiTableCell]] = []
-        for rowNode in node.content where rowNode.type == .element && rowNode.tag == "tr" {
+        for rowNode in rowNodes(from: node.content) where rowNode.type == .element && rowNode.tag == "tr" {
             var cells: [WikiTableCell] = []
             for cellNode in rowNode.content where cellNode.type == .element {
                 guard cellNode.tag == "td" || cellNode.tag == "th" else { continue }
@@ -510,6 +535,12 @@ struct WikiContentView: View {
 struct WikiBlockView: View {
     let block: WikiBlock
     let baseURL: URL?
+
+    /// Verfügbare Breite des Content-Bereichs, gegen die Tabellen ihre
+    /// Spaltenbreiten verteilen. Wird vom Breiten-Sensor direkt an der Tabelle
+    /// gemessen; `0` bedeutet „noch nicht gemessen" → Tabellen fallen auf die
+    /// Minimalspaltenbreite zurück (der ScrollView scrollt).
+    @State private var tableWidth: CGFloat = 0
 
     var body: some View {
         switch block {
@@ -657,40 +688,180 @@ struct WikiBlockView: View {
         }
     }
 
-    /// Renders a table as a grid with a header row and subtle cell borders.
+    /// Eine einzelne sichtbare Tabellen-Zelle: fixe Spaltenbreite, volle
+    /// Zeilenhöhe, Zebra-/Header-Hintergrund und rechte Trennlinie. Hintergrund
+    /// und Trenner liegen NACH dem `.frame`, damit sie die gesamte Spalte und
+    /// Zeilenhöhe abdecken (nicht nur den intrinsischen Textinhalt).
+    /// Farbe der inneren Trennlinien (Spalten/Zeilen). Gegenüber `separator`
+    /// dezent verstärkt, damit die Linien auch im Hellmodus klar sichtbar sind.
+    private static let tableSeparator = Color(.separator).opacity(0.7)
+
+    /// Zebra-Hintergrund für wechselnde Datenzeilen: `secondarySystemFill` ist
+    /// ein System-Fill, der im Hell- wie im Dunkelmodus deutlich sichtbar ist.
+    private static let tableZebra = Color(.secondarySystemFill)
+
+    @ViewBuilder
+    private func tableCell(_ cell: WikiTableCell, rowIndex: Int, width: CGFloat) -> some View {
+        let background: Color = cell.isHeader
+            ? Theme.Palette.accent.opacity(0.15)
+            : (rowIndex.isMultiple(of: 2) ? Color.clear : Self.tableZebra)
+        cellContent(cell)
+            .frame(width: width, alignment: .topLeading)
+            .frame(maxHeight: .infinity, alignment: .topLeading)
+            .background(background)
+            .overlay(alignment: .trailing) {
+                Rectangle()
+                    .fill(Self.tableSeparator)
+                    .frame(width: 1.5)
+            }
+    }
+
+    /// Renders a table as a grid with a header row, aligned columns and subtle
+    /// cell borders. The available width is measured ONCE by an invisible
+    /// sensor wrapped around the table (never on the ScrollView itself); the
+    /// column widths are then distributed against it so the table fills the
+    /// content column and only scrolls when it truly overflows.
     @ViewBuilder
     private func tableContent(_ table: WikiTable) -> some View {
-        let columns = table.columnCount
-        ScrollView(.horizontal, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(table.rows.indices, id: \.self) { rowIndex in
-                    let row = table.rows[rowIndex]
-                    HStack(alignment: .top, spacing: 0) {
-                        ForEach(row.indices, id: \.self) { cellIndex in
-                            let cell = row[cellIndex]
-                            cellContent(cell)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+        let columns = max(table.columnCount, 1)
+        let weights = columnWeights(for: table)
+        let widths = Self.distributedColumnWidths(weights: weights, available: tableWidth)
+
+        ZStack(alignment: .topLeading) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(table.rows.indices, id: \.self) { rowIndex in
+                        HStack(alignment: .top, spacing: 0) {
+                            ForEach(0..<columns, id: \.self) { columnIndex in
+                                tableCell(
+                                    table.cell(row: rowIndex, column: columnIndex),
+                                    rowIndex: rowIndex,
+                                    width: widths[columnIndex]
+                                )
+                            }
                         }
-                        if row.count < columns {
-                            ForEach(0..<(columns - row.count), id: \.self) { _ in
-                                cellContent(WikiTableCell(blocks: []))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(alignment: .bottom) {
+                            if rowIndex < table.rows.count - 1 {
+                                Rectangle()
+                                    .fill(Self.tableSeparator)
+                                    .frame(height: 1.5)
                             }
                         }
                     }
                 }
+                .background(
+                    Theme.Palette.surface,
+                    in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
+                        .strokeBorder(Color(.separator).opacity(0.8))
+                )
             }
-            .background(
-                Theme.Palette.surface,
-                in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
-                    .strokeBorder(Color(.separator).opacity(0.4))
-            )
+        }
+        .frame(maxWidth: .infinity)
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { tableWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, newWidth in
+                        tableWidth = newWidth
+                    }
+            }
+        )
+    }
+
+    /// Minimalspaltenbreite. Wird angewendet, wenn die Parent-Breite noch nicht
+    /// gemessen wurde oder selbst die Summe aller Minima die verfügbare Breite
+    /// übersteigt (dann scrollt der horizontale ScrollView).
+    private static let minCellWidth: CGFloat = 96
+
+    /// Pro Spalte ein Inhaltsgewicht (Zeichenzahl der breitesten Zelle). Die
+    /// Spaltenbreiten werden proportional zu diesen Gewichten auf die verfügbare
+    /// Content-Breite verteilt — die Tabellenbreite selbst kommt IMMER vom
+    /// Parent-Container, nie aus dem Tabelleninhalt.
+    private func columnWeights(for table: WikiTable) -> [Int] {
+        let columns = max(table.columnCount, 1)
+        return (0..<columns).map { column in
+            var weight = 0
+            for rowIndex in table.rows.indices {
+                weight = max(weight, Self.textLength(of: table.cell(row: rowIndex, column: column)))
+            }
+            return max(weight, 1)
         }
     }
 
+    /// Verteilung der Spaltenbreiten auf die verfügbare Content-Breite:
+    /// - Keine Breite gemessen (`available <= 0`) → alle Spalten auf
+    ///   `minCellWidth`, der ScrollView scrollt, bis die Breite ankommt.
+    /// - Passt selbst die Summe der Minima nicht → alle Minima, der ScrollView
+    ///   scrollt horizontal (nur bei echter Überbreite).
+    /// - Sonst bekommt jede Spalte `minCellWidth` plus den proportional nach
+    ///   Inhaltsgewicht verteilten Rest. Die Summe entspricht `available`.
+    private static func distributedColumnWidths(weights: [Int], available: CGFloat) -> [CGFloat] {
+        let count = weights.count
+        guard count > 0 else { return [] }
+
+        guard available > 0 else {
+            return Array(repeating: Self.minCellWidth, count: count)
+        }
+
+        let minTotal = Self.minCellWidth * CGFloat(count)
+        if minTotal >= available {
+            return Array(repeating: Self.minCellWidth, count: count)
+        }
+
+        let extra = available - minTotal
+        var totalWeight: CGFloat = 0
+        for column in 0..<count {
+            totalWeight += CGFloat(weights[column])
+        }
+
+        var result: [CGFloat] = []
+        result.reserveCapacity(count)
+        for column in 0..<count {
+            let width = Self.minCellWidth + extra * (CGFloat(weights[column]) / totalWeight)
+            result.append(width)
+        }
+        return result
+    }
+
+    /// Zeichenlänge eines Zelleninhalts (Gewicht für die Spaltenverteilung).
+    private static func textLength(of cell: WikiTableCell) -> Int {
+        cell.blocks.reduce(0) { $0 + textLength(of: $1) }
+    }
+
+    private static func textLength(of block: WikiBlock) -> Int {
+        switch block {
+        case .paragraph(let inline): return inlineLength(inline)
+        case .heading(_, let inline): return inlineLength(inline)
+        case .bulletList(let items): return items.reduce(0) { $0 + textLength(of: $1) }
+        case .orderedList(_, let items): return items.reduce(0) { $0 + textLength(of: $1) }
+        case .taskList(let items): return items.reduce(0) { $0 + textLength(of: $1) }
+        case .codeBlock(let code): return code.count
+        case .quote(let blocks): return blocks.reduce(0) { $0 + textLength(of: $1) }
+        case .rule: return 0
+        case .image(_, let alt): return alt.count
+        case .table(let table): return table.rows.flatMap { $0 }.reduce(0) { $0 + textLength(of: $1) }
+        }
+    }
+
+    private static func inlineLength(_ inline: [WikiInline]) -> Int {
+        inline.reduce(0) { result, part in
+            if case .text(let string, _) = part {
+                return result + string.count
+            }
+            return result + 1
+        }
+    }
+
+    private static func textLength(of item: WikiListItem) -> Int {
+        item.blocks.reduce(0) { $0 + textLength(of: $1) }
+    }
+
+    /// Reiner Zelleninhalt ohne Hintergrund/Trennlinien; die Zellen füllen die
+    /// Spaltenbreite über `maxHeight: .infinity` aus, damit die Hintergründe
+    /// (Header-Tint, Zebra) und Trennlinien die volle Zellenhöhe abdecken.
     @ViewBuilder
     private func cellContent(_ cell: WikiTableCell) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
@@ -700,14 +871,6 @@ struct WikiBlockView: View {
         }
         .font(cell.isHeader ? .body.weight(.semibold) : .body)
         .padding(Theme.Spacing.md)
-        .background(
-            cell.isHeader ? Color.accentColor.opacity(0.08) : Color.clear
-        )
-        .overlay(alignment: .trailing) {
-            Rectangle()
-                .fill(Color(.separator).opacity(0.3))
-                .frame(width: 0.5)
-        }
     }
 
     private func inlineText(_ inline: [WikiInline]) -> Text {

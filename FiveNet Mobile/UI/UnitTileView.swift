@@ -13,9 +13,7 @@ struct UnitTileView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(unit.initials)
-                    .font(.title3.bold())
-                    .foregroundStyle(color)
+                UnitBadgeCircle(color: color, content: unit.initials, size: 44)
                 Spacer()
                 Button {
                     appState.toggleUnitFavorite(unit.id)

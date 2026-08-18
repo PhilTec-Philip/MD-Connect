@@ -186,7 +186,7 @@ final class FiveNetClient: @unchecked Sendable {
         request.pagination.offset = offset
         request.pagination.pageSize = pageSize
         request.sort.columns = [
-            Resources_Common_Database_SortByColumn.with { $0.id = "created_at" }
+            Resources_Common_Database_SortByColumn.with { $0.id = "createdAt"; $0.desc = true }
         ]
         return try await call(
             service: "services.citizens.CitizensService",
@@ -1123,6 +1123,23 @@ final class FiveNetClient: @unchecked Sendable {
         return response.count
     }
 
+    /// Fetches job statistics (employee count over time, matching the web
+    /// `jobs.StatsService/GetStats` page). Category/period mirror the web
+    /// query; the server caps the range at 365 days and defaults to daily.
+    func getStats(start: Date, end: Date, period: Resources_Stats_StatsPeriod = .unspecified, category: Resources_Stats_StatsCategory = .employeeCountOverTime) async throws -> Services_Jobs_GetStatsResponse {
+        var request = Services_Jobs_GetStatsRequest()
+        request.start = toTimestampProto(start)
+        request.end = toTimestampProto(end)
+        request.period = period
+        request.category = category
+        return try await call(
+            service: "services.jobs.StatsService",
+            method: "GetStats",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_GetStatsResponse.self
+        )
+    }
+
     /// Lists timeclock entries (daily view).
     func listTimeclock(userMode: Resources_Jobs_Timeclock_TimeclockViewMode = .unspecified, mode: Resources_Jobs_Timeclock_TimeclockMode = .daily, perDay: Bool = false, userIds: [Int32] = [], start: Date? = nil, end: Date? = nil, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListTimeclockResponse {
         var request = Services_Jobs_ListTimeclockRequest()
@@ -1374,6 +1391,381 @@ final class FiveNetClient: @unchecked Sendable {
             method: "DeleteJobLogo",
             requestData: try request.serializedData(),
             responseType: Services_Settings_DeleteJobLogoResponse.self
+        )
+    }
+
+    // MARK: - Jobs: Gruppen (GroupsService)
+
+    /// Lists job groups, optionally filtered by states/kind/search. Mirrors the
+    /// web `groups/List.vue` list request (default sort `sort_rank` asc).
+    func listGroups(states: [Resources_Jobs_Groups_GroupState] = [], kind: Resources_Jobs_Groups_GroupType? = nil, search: String = "", includeCounts: Bool = true, includeInactive: Bool = false, includeArchived: Bool = false, groupIds: [Int32] = [], sortColumn: String = "sort_rank", desc: Bool = false, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupsResponse {
+        var request = Services_Jobs_ListGroupsRequest()
+        request.pagination.offset = offset
+        request.pagination.pageSize = pageSize
+        if let kind {
+            request.kind = kind
+        }
+        if !search.isEmpty {
+            request.search = search
+        }
+        request.states = states
+        request.includeCounts = includeCounts
+        request.includeInactive = includeInactive
+        request.includeArchived = includeArchived
+        request.groupIds = groupIds
+        request.sort.columns = [
+            Resources_Common_Database_SortByColumn.with { $0.id = sortColumn; $0.desc = desc }
+        ]
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "ListGroups",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_ListGroupsResponse.self
+        )
+    }
+
+    /// Fetches a single job group with optional include flags. The detail view
+    /// only needs `group` + `access` (set all includes false, `includeArchived` true).
+    func getGroup(id: Int64, includeRules: Bool = false, includeLeaders: Bool = false, includeManualMembers: Bool = false, includeExclusions: Bool = false, includeResolvedMembers: Bool = false, includeArchived: Bool = true) async throws -> Services_Jobs_GetGroupResponse {
+        var request = Services_Jobs_GetGroupRequest()
+        request.id = id
+        request.includeRules = includeRules
+        request.includeLeaders = includeLeaders
+        request.includeManualMembers = includeManualMembers
+        request.includeExclusions = includeExclusions
+        request.includeResolvedMembers = includeResolvedMembers
+        request.includeArchived = includeArchived
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "GetGroup",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_GetGroupResponse.self
+        )
+    }
+
+    /// Creates a new job group. The server fills `job` from the session token.
+    func createGroup(_ group: Services_Jobs_CreateGroupRequest) async throws -> Resources_Jobs_Groups_Group {
+        let response: Services_Jobs_CreateGroupResponse = try await call(
+            service: "services.jobs.GroupsService",
+            method: "CreateGroup",
+            requestData: try group.serializedData(),
+            responseType: Services_Jobs_CreateGroupResponse.self
+        )
+        return response.group
+    }
+
+    /// Updates an existing job group.
+    func updateGroup(_ request: Services_Jobs_UpdateGroupRequest) async throws -> Resources_Jobs_Groups_Group {
+        let response: Services_Jobs_UpdateGroupResponse = try await call(
+            service: "services.jobs.GroupsService",
+            method: "UpdateGroup",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_UpdateGroupResponse.self
+        )
+        return response.group
+    }
+
+    /// Archives a job group (requires a reason, mirrors the web confirm modal).
+    func archiveGroup(id: Int64, reason: String = "") async throws -> Resources_Jobs_Groups_Group {
+        var request = Services_Jobs_ArchiveGroupRequest()
+        request.id = id
+        if !reason.isEmpty {
+            request.reason = reason
+        }
+        let response: Services_Jobs_ArchiveGroupResponse = try await call(
+            service: "services.jobs.GroupsService",
+            method: "ArchiveGroup",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_ArchiveGroupResponse.self
+        )
+        return response.group
+    }
+
+    /// Restores an archived job group.
+    func restoreGroup(id: Int64) async throws -> Resources_Jobs_Groups_Group {
+        var request = Services_Jobs_RestoreGroupRequest()
+        request.id = id
+        let response: Services_Jobs_RestoreGroupResponse = try await call(
+            service: "services.jobs.GroupsService",
+            method: "RestoreGroup",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_RestoreGroupResponse.self
+        )
+        return response.group
+    }
+
+    /// Deletes a job group logo.
+    func deleteGroupLogo(id: Int64) async throws -> Resources_Jobs_Groups_Group {
+        var request = Services_Jobs_DeleteGroupLogoRequest()
+        request.id = id
+        let response: Services_Jobs_DeleteGroupLogoResponse = try await call(
+            service: "services.jobs.GroupsService",
+            method: "DeleteGroupLogo",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_DeleteGroupLogoResponse.self
+        )
+        return response.group
+    }
+
+    /// Lists resolved group members (rules + manual + leaders − exclusions).
+    func listGroupMembers(groupID: Int64, search: String = "", sources: [Resources_Jobs_Groups_GroupMemberSource] = [], includeExcluded: Bool = true, includeLeaders: Bool = true, includeReasons: Bool = true, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupMembersResponse {
+        var request = Services_Jobs_ListGroupMembersRequest()
+        request.pagination.offset = offset
+        request.pagination.pageSize = pageSize
+        request.groupID = groupID
+        if !search.isEmpty {
+            request.search = search
+        }
+        request.includeExcluded = includeExcluded
+        request.includeLeaders = includeLeaders
+        request.includeReasons = includeReasons
+        request.sources = sources
+        request.sort.columns = [
+            Resources_Common_Database_SortByColumn.with { $0.id = "user_id"; $0.desc = false }
+        ]
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "ListGroupMembers",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_ListGroupMembersResponse.self
+        )
+    }
+
+    /// Lists explicitly added group members.
+    func listGroupManualMembers(groupID: Int64, search: String = "", offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupManualMembersResponse {
+        var request = Services_Jobs_ListGroupManualMembersRequest()
+        request.pagination.offset = offset
+        request.pagination.pageSize = pageSize
+        request.groupID = groupID
+        if !search.isEmpty {
+            request.search = search
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "ListGroupManualMembers",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_ListGroupManualMembersResponse.self
+        )
+    }
+
+    /// Lists group member exclusions.
+    func listGroupMemberExclusions(groupID: Int64, search: String = "", offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupMemberExclusionsResponse {
+        var request = Services_Jobs_ListGroupMemberExclusionsRequest()
+        request.pagination.offset = offset
+        request.pagination.pageSize = pageSize
+        request.groupID = groupID
+        if !search.isEmpty {
+            request.search = search
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "ListGroupMemberExclusions",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_ListGroupMemberExclusionsResponse.self
+        )
+    }
+
+    /// Lists group leaders.
+    func listGroupLeaders(groupID: Int64, search: String = "", offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupLeadersResponse {
+        var request = Services_Jobs_ListGroupLeadersRequest()
+        request.pagination.offset = offset
+        request.pagination.pageSize = pageSize
+        request.groupID = groupID
+        if !search.isEmpty {
+            request.search = search
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "ListGroupLeaders",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_ListGroupLeadersResponse.self
+        )
+    }
+
+    /// Adds (or updates via upsert semantics) a manual group member.
+    func addGroupMember(groupID: Int64, userID: Int32, reason: String = "") async throws -> Services_Jobs_AddGroupMemberResponse {
+        var request = Services_Jobs_AddGroupMemberRequest()
+        request.groupID = groupID
+        request.userID = userID
+        if !reason.isEmpty {
+            request.reason = reason
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "AddGroupMember",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_AddGroupMemberResponse.self
+        )
+    }
+
+    /// Removes a manual group member.
+    func removeGroupMember(groupID: Int64, userID: Int32, reason: String = "") async throws -> Services_Jobs_RemoveGroupMemberResponse {
+        var request = Services_Jobs_RemoveGroupMemberRequest()
+        request.groupID = groupID
+        request.userID = userID
+        if !reason.isEmpty {
+            request.reason = reason
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "RemoveGroupMember",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_RemoveGroupMemberResponse.self
+        )
+    }
+
+    /// Excludes a user from resolved group membership (upsert semantics for edits).
+    func excludeGroupMember(groupID: Int64, userID: Int32, reasonType: Resources_Jobs_Groups_GroupExclusionReason, reason: String = "") async throws -> Services_Jobs_ExcludeGroupMemberResponse {
+        var request = Services_Jobs_ExcludeGroupMemberRequest()
+        request.groupID = groupID
+        request.userID = userID
+        request.reasonType = reasonType
+        if !reason.isEmpty {
+            request.reason = reason
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "ExcludeGroupMember",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_ExcludeGroupMemberResponse.self
+        )
+    }
+
+    /// Removes a group member exclusion.
+    func removeGroupMemberExclusion(groupID: Int64, userID: Int32, reason: String = "") async throws -> Services_Jobs_RemoveGroupMemberExclusionResponse {
+        var request = Services_Jobs_RemoveGroupMemberExclusionRequest()
+        request.groupID = groupID
+        request.userID = userID
+        if !reason.isEmpty {
+            request.reason = reason
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "RemoveGroupMemberExclusion",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_RemoveGroupMemberExclusionResponse.self
+        )
+    }
+
+    /// Adds a group leader.
+    func addGroupLeader(groupID: Int64, userID: Int32, reason: String = "") async throws -> Services_Jobs_AddGroupLeaderResponse {
+        var request = Services_Jobs_AddGroupLeaderRequest()
+        request.groupID = groupID
+        request.userID = userID
+        if !reason.isEmpty {
+            request.reason = reason
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "AddGroupLeader",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_AddGroupLeaderResponse.self
+        )
+    }
+
+    /// Removes a group leader.
+    func removeGroupLeader(groupID: Int64, userID: Int32, reason: String = "") async throws -> Services_Jobs_RemoveGroupLeaderResponse {
+        var request = Services_Jobs_RemoveGroupLeaderRequest()
+        request.groupID = groupID
+        request.userID = userID
+        if !reason.isEmpty {
+            request.reason = reason
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "RemoveGroupLeader",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_RemoveGroupLeaderResponse.self
+        )
+    }
+
+    /// Lists group membership rules.
+    func listGroupRules(groupID: Int64, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupRulesResponse {
+        var request = Services_Jobs_ListGroupRulesRequest()
+        request.pagination.offset = offset
+        request.pagination.pageSize = pageSize
+        request.groupID = groupID
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "ListGroupRules",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_ListGroupRulesResponse.self
+        )
+    }
+
+    /// Creates a new group membership rule.
+    func createGroupRule(groupID: Int64, rule: Services_Jobs_GroupRuleInput, reason: String = "") async throws -> Services_Jobs_CreateGroupRuleResponse {
+        var request = Services_Jobs_CreateGroupRuleRequest()
+        request.groupID = groupID
+        request.rule = rule
+        if !reason.isEmpty {
+            request.reason = reason
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "CreateGroupRule",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_CreateGroupRuleResponse.self
+        )
+    }
+
+    /// Updates an existing group membership rule.
+    func updateGroupRule(groupID: Int64, ruleID: Int64, rule: Services_Jobs_GroupRuleInput, reason: String = "") async throws -> Services_Jobs_UpdateGroupRuleResponse {
+        var request = Services_Jobs_UpdateGroupRuleRequest()
+        request.groupID = groupID
+        request.ruleID = ruleID
+        request.rule = rule
+        if !reason.isEmpty {
+            request.reason = reason
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "UpdateGroupRule",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_UpdateGroupRuleResponse.self
+        )
+    }
+
+    /// Deletes a group membership rule (requires a reason, mirrors the web).
+    func deleteGroupRule(groupID: Int64, ruleID: Int64, reason: String = "") async throws -> Services_Jobs_DeleteGroupRuleResponse {
+        var request = Services_Jobs_DeleteGroupRuleRequest()
+        request.groupID = groupID
+        request.ruleID = ruleID
+        if !reason.isEmpty {
+            request.reason = reason
+        }
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "DeleteGroupRule",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_DeleteGroupRuleResponse.self
+        )
+    }
+
+    /// Lists group activity (Audit-like feed for a group).
+    func listGroupActivity(groupID: Int64, types: [Resources_Jobs_Groups_GroupActivityType] = [], userID: Int32? = nil, from: Date? = nil, to: Date? = nil, offset: Int64 = 0, pageSize: Int64 = 50) async throws -> Services_Jobs_ListGroupActivityResponse {
+        var request = Services_Jobs_ListGroupActivityRequest()
+        request.pagination.offset = offset
+        request.pagination.pageSize = pageSize
+        request.groupID = groupID
+        request.types = types
+        if let userID {
+            request.userID = userID
+        }
+        if let from {
+            request.from = toTimestampProto(from)
+        }
+        if let to {
+            request.to = toTimestampProto(to)
+        }
+        request.sort.columns = [
+            Resources_Common_Database_SortByColumn.with { $0.id = "created_at"; $0.desc = true }
+        ]
+        return try await call(
+            service: "services.jobs.GroupsService",
+            method: "ListGroupActivity",
+            requestData: try request.serializedData(),
+            responseType: Services_Jobs_ListGroupActivityResponse.self
         )
     }
 

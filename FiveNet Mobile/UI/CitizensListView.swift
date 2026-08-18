@@ -15,7 +15,6 @@ struct CitizensListView: View {
     @State private var currentPage: Int64 = 0
     @State private var totalCount: Int64 = 0
     @State private var hasLoaded = false
-    @State private var selectedCitizen: Resources_Users_User?
 
     private let identifierFormat = CitizenIDFormat()
 
@@ -57,14 +56,13 @@ struct CitizensListView: View {
                 } else {
                     Section("\(totalCount) Bürger gefunden") {
                         ForEach(citizens) { citizen in
-                            Button {
-                                selectedCitizen = citizen
-                            } label: {
+                            NavigationLink(value: citizen.userID) {
                                 ListCardRow {
                                     CitizenRow(user: citizen, identifierFormat: identifierFormat)
                                 }
                             }
                             .buttonStyle(.plain)
+                            .navigationLinkIndicatorVisibility(.hidden)
                             .cardRow()
                         }
                     }
@@ -123,8 +121,8 @@ struct CitizensListView: View {
                 await load(reset: true)
             }
         }
-        .navigationDestination(item: $selectedCitizen) { citizen in
-            CitizenDetailView(userID: citizen.userID)
+        .navigationDestination(for: Int32.self) { userID in
+            CitizenDetailView(userID: userID)
         }
     }
 

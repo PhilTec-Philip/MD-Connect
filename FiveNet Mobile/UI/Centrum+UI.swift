@@ -57,6 +57,33 @@ struct IDBadge: View {
     }
 }
 
+/// Runde Einheiten-Anzeige (Kreis). Die Einheitenfarbe bildet einen Umriss-Ring,
+/// der Inhalt (Initialen oder Mitgliederzahl) ist darin Schwarz im Hellmodus
+/// bzw. Weiß im Dunkelmodus — dadurch bleibt die Zahl auch bei dunklen
+/// Einheitenfarben gut lesbar.
+struct UnitBadgeCircle: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let color: Color
+    let content: String
+    var size: CGFloat = 44
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(color, lineWidth: 2)
+                .frame(width: size, height: size)
+            Text(content)
+                .font(.headline.bold())
+                .foregroundStyle(colorScheme == .dark ? .white : .black)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .padding(.horizontal, Theme.Spacing.xs)
+        }
+        .frame(width: size, height: size)
+    }
+}
+
 extension Resources_Centrum_Dispatches_StatusDispatch {
     var label: String {
         switch self {

@@ -29,6 +29,10 @@ extension Resources_Users_User: Identifiable {
     public var id: Int32 { userID }
 }
 
+extension Resources_Access_JobAccess: Identifiable {}
+extension Resources_Access_UserAccess: Identifiable {}
+extension Resources_Access_QualificationAccess: Identifiable {}
+
 extension Resources_Users_Short_UserShort: Identifiable {
     public var id: Int32 { userID }
 }
@@ -57,6 +61,22 @@ extension Resources_Documents_Approval_ApprovalTask: Identifiable {}
 extension Resources_Jobs_Colleagues_Colleague: Identifiable {
     public var id: Int32 { userID }
 }
+
+extension Resources_Jobs_Groups_Group: Identifiable {}
+extension Resources_Jobs_Groups_GroupLeader: Identifiable {
+    public var id: String { "\(groupID)-\(userID)" }
+}
+extension Resources_Jobs_Groups_GroupManualMember: Identifiable {
+    public var id: String { "\(groupID)-\(userID)" }
+}
+extension Resources_Jobs_Groups_GroupMemberExclusion: Identifiable {
+    public var id: String { "\(groupID)-\(userID)" }
+}
+extension Resources_Jobs_Groups_GroupRule: Identifiable {}
+extension Resources_Jobs_Groups_GroupResolvedMember: Identifiable {
+    public var id: String { "\(groupID)-\(userID)" }
+}
+extension Resources_Jobs_Groups_GroupActivity: Identifiable {}
 
 extension Resources_Jobs_Colleagues_Activity_ColleagueActivity: Identifiable {}
 extension Resources_Jobs_Labels_Label: Identifiable {}

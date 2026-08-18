@@ -59,6 +59,19 @@ struct LiveMapView: View {
     @State private var selectedMarker: Resources_Livemap_Markers_MarkerMarker?
     @AppStorage("livemapShowHeatmap") private var showHeatmap = false
     @State private var heatmapEntries: [Resources_Livemap_Heatmap_HeatmapEntry] = []
+    @State private var longPressPosition: CGPoint?
+    @State private var longPressStartLocation: CGPoint?
+    @State private var showCreateDispatchSheet = false
+
+    init(initialTab: QuickAccessTab? = nil) {
+        if let initialTab {
+            switch initialTab {
+            case .livemapDuty: _viewMode = State(initialValue: .duty)
+            case .livemapUnits: _viewMode = State(initialValue: .units)
+            default: _viewMode = State(initialValue: .map)
+            }
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -97,7 +110,13 @@ struct LiveMapView: View {
         .sheet(item: $selectedMarker) { marker in
             MarkerMarkerDetailSheet(marker: marker)
         }
+        .sheet(isPresented: $showCreateDispatchSheet) {
+            CreateDispatchSheet(presetPosition: longPressPosition)
+        }
         .task {
+            if let baseURL = appState.client?.baseURL {
+                await PostalLoader.shared.refresh(baseURL: baseURL)
+            }
             await loadInitialCenterIfNeeded()
             await appState.startCentrumStream()
             await appState.startLivemapStream()
@@ -204,6 +223,7 @@ struct LiveMapView: View {
             .contentShape(Rectangle())
             .gesture(dragGesture)
             .simultaneousGesture(magnifyGesture)
+            .simultaneousGesture(longPressGesture(viewportOrigin: viewportOrigin))
         }
         .ignoresSafeArea(edges: .bottom)
     }
@@ -275,6 +295,29 @@ struct LiveMapView: View {
             .onEnded { _ in
                 startZoom = mapZoom
             }
+    }
+
+    /// Long-press on the map opens the "Einsatz erstellen" sheet with the
+    /// tapped position prefilled — after the hold-timeout (0,5 s), while the
+    /// finger is still down. Location is captured by a simultaneous zero-
+    /// distance drag (a bare `LongPressGesture` has no location).
+    private func longPressGesture(viewportOrigin: CGPoint) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                longPressStartLocation = value.startLocation
+            }
+            .simultaneously(with: LongPressGesture(minimumDuration: 0.5)
+                .onEnded { _ in
+                    guard let start = longPressStartLocation else { return }
+                    let viewPoint = CGPoint(
+                        x: start.x + viewportOrigin.x,
+                        y: start.y + viewportOrigin.y
+                    )
+                    let gamePoint = MapProjection.unproject(viewPoint, zoom: mapZoom)
+                    longPressPosition = clampCenter(gamePoint)
+                    showCreateDispatchSheet = true
+                }
+            )
     }
 
     private func zoomBy(_ delta: Int) {
@@ -912,7 +955,8 @@ extension Resources_Livemap_Markers_MarkerType {
 
 // MARK: - Tile loading
 
-/// Loads a single map tile from the FiveNet server with on-disk-free in-memory caching.
+/// Loads a single map tile from the FiveNet server with an in-memory cache
+/// plus an on-disk cache (Library/Caches/FiveNetTiles/), keyed by the tile URL.
 private struct MapTileView: View {
     let url: URL
     let backgroundColor: Color
@@ -937,19 +981,54 @@ private struct MapTileView: View {
 private final class MapTileCache {
     static let shared = MapTileCache()
 
-    private let cache = NSCache<NSURL, UIImage>()
+    private let memoryCache = NSCache<NSURL, UIImage>()
+
+    private static var diskDirectory: URL? {
+        guard let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+        let dir = caches.appendingPathComponent("FiveNetTiles", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private static func diskFileURL(for url: URL) -> URL? {
+        guard let dir = diskDirectory else { return nil }
+        let host = url.host ?? "localhost"
+        let path = url.path.replacingOccurrences(of: "/", with: "_")
+        return dir.appendingPathComponent(host + path)
+    }
 
     func image(for url: URL) async -> UIImage? {
-        if let hit = cache.object(forKey: url as NSURL) {
+        if let hit = memoryCache.object(forKey: url as NSURL) {
             return hit
+        }
+        if let fileURL = Self.diskFileURL(for: url),
+           let data = await Self.readData(from: fileURL),
+           let diskImage = UIImage(data: data) {
+            memoryCache.setObject(diskImage, forKey: url as NSURL)
+            return diskImage
         }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             guard let image = UIImage(data: data) else { return nil }
-            cache.setObject(image, forKey: url as NSURL)
+            memoryCache.setObject(image, forKey: url as NSURL)
+            if let fileURL = Self.diskFileURL(for: url) {
+                Self.write(data, to: fileURL)
+            }
             return image
         } catch {
             return nil
+        }
+    }
+
+    private nonisolated static func readData(from url: URL) async -> Data? {
+        await Task.detached(priority: .utility) {
+            try? Data(contentsOf: url)
+        }.value
+    }
+
+    private nonisolated static func write(_ data: Data, to url: URL) {
+        Task.detached(priority: .utility) {
+            try? data.write(to: url, options: .atomic)
         }
     }
 }

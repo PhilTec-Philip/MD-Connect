@@ -89,14 +89,7 @@ struct MyDutyView: View {
     private func unitCard(_ unit: Resources_Centrum_Units_Unit) -> some View {
         NavigationLink(value: DutyRoute.unit(unit.id)) {
             HStack(spacing: Theme.Spacing.lg) {
-                ZStack {
-                    Circle()
-                        .fill(unitColor(unit).opacity(0.2))
-                        .frame(width: 44, height: 44)
-                    Text(unit.initials)
-                        .font(.headline.bold())
-                        .foregroundStyle(unitColor(unit))
-                }
+                UnitBadgeCircle(color: unitColor(unit), content: unit.initials)
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                     Text("\(unit.initials) – \(unit.name)")
                         .font(.headline)
@@ -110,6 +103,7 @@ struct MyDutyView: View {
                 Text(unit.status.status.label)
                     .font(.caption.bold())
                     .foregroundStyle(unit.status.status.color)
+                CardChevron()
             }
             .padding(Theme.Spacing.xl)
             .background(
@@ -119,6 +113,7 @@ struct MyDutyView: View {
             .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
         }
         .buttonStyle(.plain)
+        .navigationLinkIndicatorVisibility(.hidden)
         .cardRow()
     }
 
@@ -235,9 +230,11 @@ struct MyDutyView: View {
                         }
                     }
                     Spacer(minLength: 0)
+                    CardChevron()
                 }
             }
             .buttonStyle(.plain)
+            .navigationLinkIndicatorVisibility(.hidden)
 
             VStack(spacing: Theme.Spacing.sm) {
                 ForEach(Self.dispatchStatusOptions) { option in

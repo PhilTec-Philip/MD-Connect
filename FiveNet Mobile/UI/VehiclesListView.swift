@@ -16,7 +16,6 @@ struct VehiclesListView: View {
     @State private var currentPage: Int64 = 0
     @State private var totalCount: Int64 = 0
     @State private var hasLoaded = false
-    @State private var selectedPlate: String?
 
     private var totalPages: Int64 {
         max(1, Int64(ceil(Double(totalCount) / Double(Self.pageSize))))
@@ -56,15 +55,14 @@ struct VehiclesListView: View {
                 } else {
                     Section("\(totalCount) Fahrzeuge gefunden") {
                         ForEach(vehicles, id: \.plate) { vehicle in
-                            Button {
-                                selectedPlate = vehicle.plate
-                            } label: {
-                                ListCardRow {
-                                    VehicleRow(vehicle: vehicle)
+NavigationLink(value: VehicleRoute(plate: vehicle.plate)) {
+                                    ListCardRow {
+                                        VehicleRow(vehicle: vehicle)
+                                    }
                                 }
-                            }
-                            .buttonStyle(.plain)
-                            .cardRow()
+                                .buttonStyle(.plain)
+                                .navigationLinkIndicatorVisibility(.hidden)
+                                .cardRow()
                         }
                     }
 
@@ -122,8 +120,8 @@ struct VehiclesListView: View {
                 await load(reset: true)
             }
         }
-        .navigationDestination(item: $selectedPlate) { plate in
-            VehicleDetailView(plate: plate)
+        .navigationDestination(for: VehicleRoute.self) { route in
+            VehicleDetailView(plate: route.plate)
         }
     }
 
@@ -224,6 +222,13 @@ private struct VehicleRow: View {
         default: return "car.fill"
         }
     }
+}
+
+/// Navigation route to a vehicle detail by license plate. A dedicated type
+/// (instead of the bare `String`) so the row's `NavigationLink` can be
+/// value-based and cannot be re-triggered by a deeper push in the same stack.
+struct VehicleRoute: Hashable {
+    let plate: String
 }
 
 #Preview {

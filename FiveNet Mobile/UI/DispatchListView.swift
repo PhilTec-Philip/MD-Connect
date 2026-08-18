@@ -16,6 +16,7 @@ struct DispatchListView: View {
                     DispatchRow(dispatch: dispatch)
                 }
                 .buttonStyle(.plain)
+                .navigationLinkIndicatorVisibility(.hidden)
                 .cardRow()
             }
             .cardListStyle()
@@ -38,9 +39,14 @@ struct DispatchListView: View {
 }
 
 /// Sheet to create a new dispatch ("Einsatz erstellen").
+///
+/// When opened from the LiveMap long-press, `presetPosition` carries the
+/// tapped game coordinate so the user only has to fill in the message etc.
 struct CreateDispatchSheet: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+
+    let presetPosition: CGPoint?
 
     @State private var message = ""
     @State private var description = ""
@@ -51,6 +57,10 @@ struct CreateDispatchSheet: View {
     @State private var postalLookupTask: Task<Void, Never>?
     @State private var isCreating = false
     @State private var errorMessage: String?
+
+    init(presetPosition: CGPoint? = nil) {
+        self.presetPosition = presetPosition
+    }
 
     var body: some View {
         NavigationStack {
@@ -121,7 +131,16 @@ struct CreateDispatchSheet: View {
 
     @ViewBuilder
     private var locationPreview: some View {
-        if isLookingUpPostal {
+        if let presetPosition {
+            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                Label("Position aus Karte übernommen", systemImage: "mappin.circle.fill")
+                    .foregroundStyle(Theme.Palette.success)
+                MapPreviewView(worldPoint: presetPosition, baseURL: appState.client?.baseURL)
+                Text("Position: \(Int(presetPosition.x)), \(Int(presetPosition.y))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } else if isLookingUpPostal {
             Text("Ort wird gesucht …")
         } else if let resolvedPostal {
             VStack(alignment: .leading, spacing: Theme.Spacing.md) {
@@ -140,7 +159,7 @@ struct CreateDispatchSheet: View {
 
     private var canSubmit: Bool {
         !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && resolvedPostal != nil
+            && (presetPosition != nil || resolvedPostal != nil)
             && !isCreating
     }
 
@@ -162,14 +181,15 @@ struct CreateDispatchSheet: View {
         defer { isCreating = false }
         do {
             let job = appState.dispatcherJob ?? appState.character?.job ?? ""
+            let position = presetPosition ?? CGPoint(x: resolvedPostal?.x ?? 0, y: resolvedPostal?.y ?? 0)
             _ = try await appState.createDispatch(
                 job: job,
                 message: message.trimmingCharacters(in: .whitespacesAndNewlines),
                 description: description.trimmingCharacters(in: .whitespacesAndNewlines),
                 anon: anon,
-                x: resolvedPostal?.x ?? 0,
-                y: resolvedPostal?.y ?? 0,
-                postal: resolvedPostal?.code ?? ""
+                x: position.x,
+                y: position.y,
+                postal: presetPosition != nil ? postal : (resolvedPostal?.code ?? "")
             )
             dismiss()
         } catch {
@@ -197,16 +217,24 @@ actor PostalLoader {
         return all?[code]
     }
 
+    /// Re-fetches `data/postals.json` so the in-memory cache reflects server
+    /// changes. Used on LiveMap entry; a failed refresh keeps the old cache.
+    func refresh(baseURL: URL) async {
+        guard let fresh = await fetch(baseURL: baseURL) else { return }
+        cache = fresh
+    }
+
     private func loadAll(baseURL: URL) async -> [String: PostalLocation]? {
         if let cache { return cache }
+        return await fetch(baseURL: baseURL)
+    }
 
+    private func fetch(baseURL: URL) async -> [String: PostalLocation]? {
         let url = baseURL.appendingPathComponent("data/postals.json")
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
             let entries = try JSONDecoder().decode([PostalLocation].self, from: data)
-            let byCode = Dictionary(uniqueKeysWithValues: entries.map { ($0.code, $0) })
-            cache = byCode
-            return byCode
+            return Dictionary(uniqueKeysWithValues: entries.map { ($0.code, $0) })
         } catch {
             return nil
         }
@@ -255,6 +283,7 @@ private struct DispatchRow: View {
             .padding(.leading, Theme.Spacing.xl)
 
             Spacer(minLength: 0)
+            CardChevron()
         }
         .padding(Theme.Spacing.md)
         .padding(.trailing, Theme.Spacing.sm)

@@ -322,14 +322,7 @@ private struct UnitBubbleRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.lg) {
-            ZStack {
-                Circle()
-                    .fill(unitColor.opacity(0.2))
-                    .frame(width: 40, height: 40)
-                Text("\(unit.users.count)")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(unitColor)
-            }
+            UnitBadgeCircle(color: unitColor, content: "\(unit.users.count)", size: 40)
             VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                 Text("\(unit.initials) – \(unit.name)")
                     .font(.subheadline.weight(.medium))
@@ -357,14 +350,7 @@ private struct UnitTile: View {
     var body: some View {
         VStack(spacing: Theme.Spacing.md) {
             HStack {
-                ZStack {
-                    Circle()
-                        .fill(unitColor.opacity(0.2))
-                        .frame(width: 36, height: 36)
-                    Text("\(unit.users.count)")
-                        .font(.caption.bold())
-                        .foregroundStyle(unitColor)
-                }
+                UnitBadgeCircle(color: unitColor, content: "\(unit.users.count)", size: 36)
                 Spacer()
                 Image(systemName: isAssigned ? "checkmark.square.fill" : "square")
                     .foregroundStyle(isAssigned ? Theme.Palette.accent : Color(.tertiaryLabel))

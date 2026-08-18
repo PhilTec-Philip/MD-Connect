@@ -39,6 +39,8 @@ enum Theme {
         static let danger: Color = .red
         /// Hinweis/Info (blau).
         static let info: Color = .blue
+        /// Neutral (grau) für unkritische/ausgegraute Elemente.
+        static let neutral: Color = .gray
 
         /// Standard-Fläche für Karten und Listen-Zeilen.
         static let surface = Color(.secondarySystemGroupedBackground)

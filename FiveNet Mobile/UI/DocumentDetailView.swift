@@ -52,13 +52,8 @@ struct DocumentDetailView: View {
                 if let document {
                     header(document)
 
-                    Picker("Bereich", selection: $selectedTab) {
-                        ForEach(DocumentTab.allCases) { tab in
-                            Text(tab.label).tag(tab)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.top, 4)
+                    PillTabBar(tabs: DocumentTab.allCases, selection: $selectedTab) { $0.label }
+                        .padding(.top, 4)
 
                     switch selectedTab {
                     case .content:
@@ -354,6 +349,21 @@ struct DocumentDetailView: View {
                 Text("Dieses Dokument hat noch keinen Inhalt.")
                     .foregroundStyle(.secondary)
             }
+
+            if !isEditingContent, canEdit(document) {
+                Button {
+                    selectedTab = .content
+                    startEditingContent()
+                } label: {
+                    Label(document.hasContent ? "Inhalt bearbeiten" : "Inhalt hinzufügen", systemImage: "pencil")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, Theme.Spacing.sm)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .tint(Theme.Palette.accent)
+                .padding(.top, Theme.Spacing.md)
+            }
         }
         .padding(.top, 4)
     }
@@ -585,8 +595,14 @@ struct DocumentDetailView: View {
     // MARK: - Content editing
 
     private func startEditingContent() {
-        guard let document, document.hasContent, document.content.hasTiptapJson else { return }
-        contentEditorModel = DocumentContentEditorModel(content: document.content)
+        guard let document else { return }
+        if document.hasContent, document.content.hasTiptapJson {
+            contentEditorModel = DocumentContentEditorModel(content: document.content)
+        } else if document.hasContent {
+            contentEditorModel = DocumentContentEditorModel(converting: document.content)
+        } else {
+            contentEditorModel = DocumentContentEditorModel(empty: ())
+        }
         isEditingContent = true
         errorMessage = nil
     }

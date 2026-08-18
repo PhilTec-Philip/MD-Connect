@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>PreferenceSpecifiers</key>
+	<array>
+		<dict>
+			<key>Title</key>
+			<string>Bildschirmschoner</string>
+			<key>FooterText</key>
+			<string>Nach der Wartezeit ohne Interaktion wird die FiveNet-Animation eingeblendet. Jede Berührung blendet sie sofort aus.</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<true/>
+			<key>Key</key>
+			<string>fivenetScreenSaverEnabled</string>
+			<key>Title</key>
+			<string>Bildschirmschoner aktiv</string>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<integer>15</integer>
+			<key>Key</key>
+			<string>fivenetScreenSaverDelay</string>
+			<key>Title</key>
+			<string>Wartezeit</string>
+			<key>Titles</key>
+			<array>
+				<string>5 Sekunden</string>
+				<string>10 Sekunden</string>
+				<string>15 Sekunden</string>
+				<string>30 Sekunden</string>
+				<string>60 Sekunden</string>
+				<string>2 Minuten</string>
+				<string>5 Minuten</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<integer>5</integer>
+				<integer>10</integer>
+				<integer>15</integer>
+				<integer>30</integer>
+				<integer>60</integer>
+				<integer>120</integer>
+				<integer>300</integer>
+			</array>
+		</dict>
+		<dict>
+			<key>FooterText</key>
+			<string>Die Einstellungsprüfung zeigt in der Bürger-Ansicht alle relevanten Daten (Fahndung, Strafen, Punkte, Haft, Fahrzeuge, Dokumente) gebündelt auf einer Registerkarte.</string>
+			<key>Title</key>
+			<string>Einstellungsprüfung</string>
+			<key>Type</key>
+			<string>PSGroupSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<true/>
+			<key>Key</key>
+			<string>fivenetHiringCheckEnabled</string>
+			<key>Title</key>
+			<string>Einstellungsprüfung aktiv</string>
+			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+		</dict>
+		<dict>
+			<key>DefaultValue</key>
+			<integer>30</integer>
+			<key>Key</key>
+			<string>fivenetHiringCheckDays</string>
+			<key>Title</key>
+			<string>Haft-Verlauf (Tage)</string>
+			<key>Titles</key>
+			<array>
+				<string>7 Tage</string>
+				<string>14 Tage</string>
+				<string>30 Tage</string>
+				<string>90 Tage</string>
+				<string>180 Tage</string>
+			</array>
+			<key>Type</key>
+			<string>PSMultiValueSpecifier</string>
+			<key>Values</key>
+			<array>
+				<integer>7</integer>
+				<integer>14</integer>
+				<integer>30</integer>
+				<integer>90</integer>
+				<integer>180</integer>
+			</array>
+		</dict>
+	</array>
+	<key>StringsTable</key>
+	<string>Root</string>
+</dict>
+</plist>

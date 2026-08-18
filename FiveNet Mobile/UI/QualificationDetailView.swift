@@ -84,13 +84,8 @@ struct QualificationDetailView: View {
                 headerSection(qualification)
 
                 Section {
-                    Picker("Ansicht", selection: $selectedTab) {
-                        ForEach(tabs) { tab in
-                            Text(tab.rawValue).tag(tab)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .listRowInsets(EdgeInsets())
+                    PillTabBar(tabs: tabs, selection: $selectedTab) { $0.rawValue }
+                        .listRowInsets(EdgeInsets())
                 }
                 .listRowBackground(Color.clear)
 

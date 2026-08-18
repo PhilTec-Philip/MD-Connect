@@ -7,20 +7,22 @@ The app connects to FiveNet instances over gRPC-Web and provides access to the c
 
 ## Features
 
-- **Overview** - module grid, profile hero, quick access; alternatively **compact view** ("efficiency layout") with your unit, your assignment, open assignments, and module tiles
-- **Citizens / Vehicles** - searchable databases with pagination, WANTED badges, and detail views
-- **LiveMap** - map with unit and incident markers, incident heatmap, "My Unit" view, join and leave unit
-- **Dispatch** - create and take incidents, incident timeline, units, activity, archive, duty unit
-- **Wiki** - pages with table of contents, pins, live search, rich content (Tiptap / HTML)
-- **Documents** - search, categories, status segments, actions for close, approve, request, reminder, and delete, plus content editor
-- **Jobs** - overview, colleagues with labels, activity, time clock, leadership register, vacation
+- **Overview** - module grid, profile hero, quick access; alternatively **compact view** ("efficiency layout") with your unit, your assignment, open assignments, and module tiles; the quick access row is **editable** (reorder, add/remove modules and tab targets, persisted per server)
+- **Screensaver** - optional animated screensaver that engages after a configurable idle delay; enable/disable and the delay are configurable in the system settings (`Settings.bundle`), and any interaction dismisses it
+- **Citizens / Vehicles** - searchable databases with pagination, WANTED badges, and detail views; the citizen profile has a **hiring check** tab ("Einstellungsprüfung") that bundles a citizen's police relevance: wanted status, open fines, points, jail history, wanted vehicles and linked documents (configurable via system settings)
+- **LiveMap** - map with unit and incident markers, incident heatmap layer, "My Unit" view, join and leave unit, **long-press on the map to create an incident at the pressed location**, unit badges with outline rings, tile **disk caching**
+- **Dispatch** - create and take incidents, incident timeline, units, activity, archive, duty unit; join/take actions are gated on being **on duty**
+- **Wiki** - pages with table of contents, pins, live search, rich content (Tiptap / HTML); **readable tables** that fill the content width with proportional columns, zebra striping and clearly visible separators
+- **Documents** - search, categories, status segments, actions for close, approve, request, reminder, and delete, plus a block-based **inline content editor** that preserves existing non-Tiptap content
+- **Jobs** - overview, colleagues with labels, activity, time clock, leadership register, vacation; **colleague statistics** tab with a count-over-time chart (requires FiveNet v2026.8.1); **job groups** (v2026.8.1) with members, rules, manual members, leaders, exclusions and group activity
 - **Qualifications** - your own and all qualifications, detail view with content and tutor, request handling and grading
 - **Calendar** - month view with vacations and FiveNet calendars, date jump, create appointment
 - **Mail** - inbox and archive, search, thread detail, compose and reply
 - **Settings** - job props, roles and permissions, audit log, Discord, dispatch, law books, storage, accounts, config, cron
-- **Alarm** - red full-screen alarm on incident assignment plus reinforcement alarm
+- **Alarm** - red full-screen alarm on incident assignment plus reinforcement alarm ("Verstärkung benötigt" for all units except the requester) with a live alarm bell
 - **Global Search** - cross-module search across citizens, vehicles, incidents, documents, and wiki
-- **Live alarm bell**, offline-aware connectivity, map design system
+- **Reliability** - fast connection establishment (~2 s) with automatic reconnect, transient stream errors suppressed, offline-aware connectivity, and a viewed-content cache for previously opened wiki/document content
+- **Design system** - consistent card layout, heroes, badges, tab selectors and spacing across all modules
 
 ## Compatibility
 

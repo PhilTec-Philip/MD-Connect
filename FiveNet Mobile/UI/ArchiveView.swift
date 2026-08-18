@@ -82,6 +82,7 @@ struct ArchiveView: View {
                                 ArchiveDispatchRow(dispatch: dispatch)
                             }
                             .buttonStyle(.plain)
+                            .navigationLinkIndicatorVisibility(.hidden)
                             .cardRow()
                         }
                     }
@@ -201,6 +202,7 @@ private struct ArchiveDispatchRow: View {
             .padding(.leading, Theme.Spacing.xl)
 
             Spacer(minLength: 0)
+            CardChevron()
         }
         .padding(Theme.Spacing.md)
         .padding(.trailing, Theme.Spacing.sm)

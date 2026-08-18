@@ -122,7 +122,6 @@ struct CalendarView: View {
     @State private var isLoadingEntries = false
     @State private var errorMessage: String?
     @State private var selectedEvent: CalendarEvent?
-    @State private var selectedColleagueID: Int32?
     @State private var showDateJump = false
     @State private var showCreateEntry = false
 
@@ -204,9 +203,7 @@ struct CalendarView: View {
                             ForEach(selectedList) { item in
                                 switch item {
                                 case .absence(let absence):
-                                    Button {
-                                        selectedColleagueID = absence.colleague.userID
-                                    } label: {
+                                    NavigationLink(value: ColleagueRoute(userID: absence.colleague.userID)) {
                                         CalendarRow(
                                             icon: "person.crop.circle.fill",
                                             color: Theme.Palette.warning,
@@ -216,6 +213,7 @@ struct CalendarView: View {
                                         )
                                     }
                                     .buttonStyle(.plain)
+                                    .navigationLinkIndicatorVisibility(.hidden)
                                     .cardRow()
                                 case .event(let event):
                                     Button {
@@ -281,9 +279,6 @@ struct CalendarView: View {
                 }
                 .environment(appState)
             }
-        }
-        .navigationDestination(item: $selectedColleagueID) { userID in
-            ColleagueDetailView(userID: userID)
         }
     }
 

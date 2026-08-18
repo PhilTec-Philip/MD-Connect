@@ -60,14 +60,8 @@ struct ColleagueDetailView: View {
                 // row renders empty/broken). The picker sits above, the content
                 // below.
                 VStack(spacing: 0) {
-                    Picker("Bereich", selection: $selectedTab) {
-                        ForEach(Tab.allCases) { tab in
-                            Text(tab.label).tag(tab)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .padding(.vertical, Theme.Spacing.md)
+                    PillTabBar(tabs: Tab.allCases, selection: $selectedTab) { $0.label }
+                        .padding(.vertical, Theme.Spacing.md)
 
                     switch selectedTab {
                     case .info:

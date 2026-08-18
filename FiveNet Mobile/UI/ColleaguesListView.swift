@@ -8,6 +8,19 @@ struct ColleaguesListView: View {
 
     private static let pageSize: Int64 = 20
 
+    private enum ColleagueTab: String, CaseIterable, Identifiable {
+        case colleagues
+        case stats
+
+        var id: String { rawValue }
+
+        var label: String {
+            self == .colleagues ? "Kollegen" : "Statistik"
+        }
+    }
+
+    @State private var selectedTab: ColleagueTab = .colleagues
+
     @State private var searchText = ""
     @State private var colleagues: [Resources_Jobs_Colleagues_Colleague] = []
     @State private var labels: [Resources_Jobs_Labels_Label] = []
@@ -19,7 +32,6 @@ struct ColleaguesListView: View {
     @State private var totalCount: Int64 = 0
     @State private var hasLoaded = false
     @State private var searchTask: Task<Void, Never>?
-    @State private var selectedColleagueID: Int32?
     @State private var showLabels = false
 
     private var totalPages: Int64 {
@@ -27,11 +39,33 @@ struct ColleaguesListView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            PillTabBar(tabs: ColleagueTab.allCases, selection: $selectedTab) { $0.label }
+                .padding(.top, Theme.Spacing.lg)
+                .padding(.bottom, Theme.Spacing.sm)
+
+            switch selectedTab {
+            case .colleagues:
+                colleaguesContent
+            case .stats:
+                ColleaguesStatsView()
+                    .environment(appState)
+            }
+        }
+        .background(Theme.Palette.background.ignoresSafeArea())
+        .navigationTitle("Kollegen")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var colleaguesContent: some View {
         Group {
             List {
                 Section {
                     SectionCard {
                         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                            if !colleagues.isEmpty && errorMessage == nil {
+                                resultsHeader
+                            }
                             HStack(spacing: Theme.Spacing.sm) {
                                 Image(systemName: "magnifyingglass")
                                     .foregroundStyle(.secondary)
@@ -83,16 +117,15 @@ struct ColleaguesListView: View {
                         message: "Für diese Filter sind keine Kollegen vorhanden."
                     )
                 } else {
-                    Section("\(totalCount) Kollegen gefunden") {
+                    Section {
                         ForEach(colleagues) { colleague in
-                            Button {
-                                selectedColleagueID = colleague.userID
-                            } label: {
+                            NavigationLink(value: ColleagueRoute(userID: colleague.userID)) {
                                 ListCardRow {
                                     ColleagueRow(colleague: colleague)
                                 }
                             }
                             .buttonStyle(.plain)
+                            .navigationLinkIndicatorVisibility(.hidden)
                             .cardRow()
                         }
                     }
@@ -133,7 +166,7 @@ struct ColleaguesListView: View {
                 }
             }
             .cardListStyle()
-            .contentMargins(.top, Theme.Spacing.xl, for: .scrollContent)
+            .contentMargins(.top, Theme.Spacing.sm, for: .scrollContent)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     NavigationLink {
@@ -176,8 +209,6 @@ struct ColleaguesListView: View {
             .refreshable {
                 await load(reset: true)
             }
-            .navigationTitle("Kollegen")
-            .navigationBarTitleDisplayMode(.inline)
             .task {
                 guard !hasLoaded else { return }
                 hasLoaded = true
@@ -186,8 +217,23 @@ struct ColleaguesListView: View {
                 _ = await (labelsLoad, colleaguesLoad)
             }
         }
-        .navigationDestination(item: $selectedColleagueID) { userID in
-            ColleagueDetailView(userID: userID)
+    }
+
+    /// Trefferzahl direkt über dem Suchfeld (im Inhaltsfluss statt sticky).
+    private var resultsHeader: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Text("\(totalCount) Kollegen gefunden")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            if isLoading {
+                ProgressView()
+            }
+            Spacer()
+            if currentPage + 1 > 1 {
+                Text("Seite \(currentPage + 1) von \(totalPages)")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
     }
 

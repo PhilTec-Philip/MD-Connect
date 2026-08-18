@@ -9,13 +9,18 @@ struct CentrumView: View {
 
     @State private var showCreateDispatchSheet = false
     @State private var showLeaveDutyUnitConfirm = false
+    @State private var selection: QuickAccessTab?
+
+    init(initialTab: QuickAccessTab? = nil) {
+        _selection = State(initialValue: initialTab)
+    }
 
     private var isDispatcher: Bool {
         appState.isDispatcher
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selection) {
             if !isDispatcher {
                 TakeControlView()
                     .tabItem {
@@ -27,18 +32,22 @@ struct CentrumView: View {
                 .tabItem {
                     Label("Einsätze", systemImage: "exclamationmark.triangle")
                 }
+                .tag(QuickAccessTab.centrumDispatches)
             UnitListView()
                 .tabItem {
                     Label("Einheiten", systemImage: "building.2")
                 }
+                .tag(QuickAccessTab.centrumUnits)
             ActivityFeedView()
                 .tabItem {
                     Label("Aktivität", systemImage: "list.bullet")
                 }
+                .tag(QuickAccessTab.centrumActivity)
             ArchiveView()
                 .tabItem {
                     Label("Archiv", systemImage: "archivebox")
                 }
+                .tag(QuickAccessTab.centrumArchive)
         }
         .toolbarBackground(.visible, for: .tabBar)
         .toolbarBackground(.visible, for: .navigationBar)

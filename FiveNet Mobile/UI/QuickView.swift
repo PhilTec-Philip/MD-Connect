@@ -90,6 +90,10 @@ struct QuickView: View {
                 }
             }
             .moduleDestinations()
+            .onAppear {
+                // Zurück vom Modul → kein aktives Modul mehr (Bildschirmschoner).
+                appState.setActiveModule(nil)
+            }
             .sheet(isPresented: $showCreateDispatchSheet) {
                 CreateDispatchSheet()
                     .environment(appState)
@@ -155,14 +159,7 @@ struct QuickView: View {
     private func unitCard(_ unit: Resources_Centrum_Units_Unit) -> some View {
         NavigationLink(value: QuickRoute.unit(unit.id)) {
             HStack(spacing: Theme.Spacing.lg) {
-                ZStack {
-                    Circle()
-                        .fill(unitColor(unit).opacity(0.2))
-                        .frame(width: 44, height: 44)
-                    Text(unit.initials)
-                        .font(.headline.bold())
-                        .foregroundStyle(unitColor(unit))
-                }
+                UnitBadgeCircle(color: unitColor(unit), content: unit.initials)
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                     Text("\(unit.initials) – \(unit.name)")
                         .font(.headline)
